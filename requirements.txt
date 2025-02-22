@@ -1,0 +1,13 @@
+torch
+torchaudio
+sounddevice
+soundfile
+numpy
+scipy
+librosa
+phonemizer
+transformers
+tensorboard
+matplotlib
+PyYAML
+tqdm 
