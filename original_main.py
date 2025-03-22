@@ -1,3 +1,8 @@
+"""
+Original entry point for the DAISY voice assistant.
+This file is kept for backward compatibility.
+It is recommended to use the new modular structure in src/ instead.
+"""
 import speech_recognition as sr
 import os
 import pyttsx3
@@ -76,20 +81,27 @@ class VoiceAssistant:
         ] + self.chat_history.get_formatted_history()
         
         # Get response from Ollama
-        try:
+        try: 
+            print("Attempting to connect to Ollama...")
             response = requests.post(
                 'http://localhost:11434/api/chat',
                 json={
-                    'model': 'llama3.2',
+                    'model': 'llama3.2:latest',
                     'messages': messages,
                     'stream': False
-                }
-            ).json()
-            
-            ai_response = response['message']['content']
+                },
+                timeout=10  # Add timeout to avoid hanging
+            )
+            print(f"Response status code: {response.status_code}")
+            response_json = response.json()
+            ai_response = response_json['message']['content']
             self.chat_history.add_message("assistant", ai_response)
             return ai_response
             
+        except requests.exceptions.ConnectionError:
+            error_msg = "Could not connect to Ollama. Is it running?"
+            print(error_msg)
+            return error_msg
         except Exception as e:
             error_msg = f"Error getting AI response: {str(e)}"
             print(error_msg)
@@ -185,4 +197,4 @@ def main():
     response('See you later, alligator!')
 
 if __name__ == "__main__":
-    main()
+    main() 

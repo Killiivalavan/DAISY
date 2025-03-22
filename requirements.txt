@@ -1,13 +1,6 @@
-torch
-torchaudio
-sounddevice
-soundfile
-numpy
-scipy
-librosa
-phonemizer
-transformers
-tensorboard
-matplotlib
-PyYAML
-tqdm 
+# Core dependencies
+torch>=1.13.0
+torchaudio>=0.13.0
+pyttsx3>=2.90
+SpeechRecognition>=3.8.1
+requests>=2.25.1 
