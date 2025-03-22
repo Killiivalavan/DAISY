@@ -12,6 +12,10 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument("--model", type=str, default="llama3.2:latest", 
                         help="Specify the Ollama model to use")
+    parser.add_argument("--no-rag", action="store_true", 
+                        help="Disable RAG (Retrieval-Augmented Generation)")
+    parser.add_argument("--process-docs", action="store_true",
+                        help="Process documents and exit")
     args = parser.parse_args()
     
     # Add src directory to path
@@ -22,6 +26,7 @@ def main():
     if args.debug:
         print(f"Debug mode enabled")
         print(f"Using model: {args.model}")
+        print(f"RAG enabled: {not args.no_rag}")
         print(f"Current directory: {current_dir}")
         print(f"Source directory: {src_dir}")
         print(f"Python path: {sys.path}")

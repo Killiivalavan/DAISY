@@ -3,6 +3,7 @@ Main entry point for the DAISY voice assistant.
 """
 import time
 import requests
+import argparse
 
 from src.utils.config import (
     ASSISTANT_NAME, TRIGGER_WORD, RECORDING_FILE, 
@@ -15,10 +16,10 @@ from src.voice.text_to_speech import TextToSpeech
 class DaisyAssistant:
     """Main DAISY voice assistant class."""
     
-    def __init__(self):
+    def __init__(self, use_rag=True, model_name="llama3.2:latest"):
         """Initialize components."""
         self.should_run = True
-        self.voice_ai = VoiceAssistant()
+        self.voice_ai = VoiceAssistant(model_name=model_name, use_rag=use_rag)
         self.speech_recognizer = SpeechRecognizer()
         self.tts = TextToSpeech()
         
@@ -34,7 +35,14 @@ class DaisyAssistant:
         """Process user command and generate response."""
         print('Thinking...')
         try:
-            response_text = self.voice_ai.get_ai_response(user_command)
+            # Check for special commands
+            if "process documents" in user_command.lower() or "index documents" in user_command.lower():
+                print("Processing documents for RAG...")
+                response_text = self.voice_ai.process_documents()
+            else:
+                # Normal response generation
+                response_text = self.voice_ai.get_ai_response(user_command)
+                
             if response_text:
                 print(f"{ASSISTANT_NAME.upper()}: {response_text}")
                 self.tts.speak(response_text)
@@ -77,9 +85,35 @@ class DaisyAssistant:
         
         self.tts.speak('See you later, alligator!')
 
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="DAISY Voice Assistant")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--model", type=str, default="llama3.2:latest", 
+                      help="Specify the Ollama model to use")
+    parser.add_argument("--no-rag", action="store_true", 
+                      help="Disable RAG (Retrieval-Augmented Generation)")
+    parser.add_argument("--process-docs", action="store_true",
+                      help="Process documents and exit")
+    return parser.parse_args()
+
 def main():
     """Main entry point."""
-    assistant = DaisyAssistant()
+    args = parse_arguments()
+    
+    use_rag = not args.no_rag
+    
+    # Create assistant
+    assistant = DaisyAssistant(use_rag=use_rag, model_name=args.model)
+    
+    # Handle document processing option
+    if args.process_docs:
+        print("Processing documents for RAG...")
+        result = assistant.voice_ai.process_documents()
+        print(result)
+        return
+    
+    # Run the assistant
     assistant.run()
 
 if __name__ == "__main__":

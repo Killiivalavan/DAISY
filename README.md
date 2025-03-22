@@ -1,6 +1,6 @@
 # D.A.I.S.Y. Voice Assistant
 
-**D**igital **A**I **S**ystem for **Y**ou - A modular voice assistant powered by Ollama.
+**D**omestic **A** **I** **S****Y**stem - A modular voice assistant powered by Ollama.
 
 ## Overview
 
