@@ -74,13 +74,25 @@ class VoiceAssistant:
             print(error_msg)
             return error_msg
     
-    def process_documents(self):
-        """Process and index documents for RAG."""
+    def process_documents(self, force_reprocess=False):
+        """
+        Process and index documents for RAG.
+        
+        Args:
+            force_reprocess: If True, reprocess all documents regardless of tracking status
+            
+        Returns:
+            Message indicating the result of document processing
+        """
         if not self.use_rag or not self.retriever:
             return "RAG is not enabled."
         
         try:
-            chunk_count = self.retriever.process_documents()
+            chunk_count = self.retriever.process_documents(force_reprocess=force_reprocess)
+            
+            if chunk_count == 0:
+                return "No new documents to process. All documents are up-to-date."
+                
             return f"Successfully processed and indexed {chunk_count} document chunks."
         except Exception as e:
             error_msg = f"Error processing documents: {str(e)}"

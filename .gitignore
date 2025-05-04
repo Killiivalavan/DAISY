@@ -53,6 +53,7 @@ ENV/
 env.bak/
 venv.bak/
 virtualenv/
+venv310/
 
 # Project specific
 data/*

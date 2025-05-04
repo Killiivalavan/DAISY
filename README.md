@@ -7,13 +7,15 @@
 DAISY is a voice assistant that uses local AI models through Ollama to provide a privacy-focused, customizable voice assistant experience. It features:
 
 - Voice interaction using speech recognition and text-to-speech
+- High-quality speech synthesis with Coqui-AI TTS (with fallback to pyttsx3)
 - Integration with Ollama for AI responses
 - Modular and extensible architecture
 
 ## Requirements
 
-- Python 3.8 or higher
+- Python 3.10 (recommended for optimal compatibility with TTS library)
 - Ollama installed and running (for AI responses)
+- PyTorch (installed automatically with requirements.txt)
 
 ## Installation
 
@@ -23,15 +25,32 @@ DAISY is a voice assistant that uses local AI models through Ollama to provide a
    cd daisy
    ```
 
-2. Install dependencies:
+2. Create a Python 3.10 virtual environment (recommended):
+   ```
+   python3.10 -m venv venv_py310
+   # On Windows
+   venv_py310\Scripts\activate
+   # On macOS/Linux
+   source venv_py310/bin/activate
+   ```
+
+3. Install dependencies:
    ```
    pip install -r requirements.txt
    ```
 
-3. Make sure Ollama is installed and running with the required model:
+4. Make sure Ollama is installed and running with the required model:
    ```
    ollama serve
    ollama pull llama3.2
+   ```
+
+5. Install espeak-NG:
+   ```
+   navigate to https://github.com/espeak-ng/espeak-ng/releases
+   download the latest release for your system. (usually the .msi file)
+   run the installer
+   make sure to add it to the environment variables
    ```
 
 ## Usage
@@ -50,11 +69,41 @@ python daisy.py --debug --model llama3.2:latest
 
 Once running, activate DAISY by saying "Hey DAISY" and then ask your question.
 
+### Testing the TTS Engine
+
+To test the TTS engine separately:
+
+```
+python test_tts.py --text "Hello, I am testing the TTS engine."
+```
+
+Additional options:
+- `--no-coqui`: Force using pyttsx3 instead of Coqui-AI TTS
+- `--list-voices`: List available voices
+- `--model MODEL_NAME`: Specify a different Coqui-AI TTS model
+- `--speaker SPEAKER_ID`: Specify a different speaker for multi-speaker models
+
+## Text-to-Speech Options
+
+DAISY now supports two TTS engines:
+
+1. **Coqui-AI TTS (Primary)**: High-quality, natural-sounding speech using deep learning models
+   - Default model: VITS with VCTK dataset (provides British accent options)
+   - Automatically uses GPU acceleration when available
+   - Multiple voices available (British and other accents)
+
+2. **pyttsx3 (Fallback)**: Traditional TTS engine
+   - Used as a fallback if Coqui-AI TTS fails to initialize or encounters an error
+   - Lower quality but more reliable on systems with limited resources
+
+The system automatically attempts to use Coqui-AI TTS first and falls back to pyttsx3 if needed.
+
 ## Project Structure
 
 ```
 daisy/
 ├── daisy.py             # Main entry script
+├── test_tts.py          # Script for testing TTS functionality
 ├── setup.py             # Setup script for installation
 ├── requirements.txt     # Dependencies
 ├── personality.txt      # Personality definition
@@ -78,6 +127,12 @@ daisy/
 ### Personality
 
 Edit the `personality.txt` file to customize DAISY's personality and behavior.
+
+### TTS Voice Selection
+
+To change the default voice:
+- Edit `src/voice/text_to_speech.py` and change the `speaker_idx` parameter in the TextToSpeech initialization
+- Use `test_tts.py --list-voices` to see available voices
 
 ## License
 

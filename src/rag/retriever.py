@@ -6,7 +6,8 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from src.rag.embedding_generator import EmbeddingGenerator
 from src.rag.vector_store import VectorStore
-from src.utils.config import MAX_DOCS_TO_RETRIEVE
+from src.rag.document_tracker import DocumentTracker
+from src.utils.config import MAX_DOCS_TO_RETRIEVE, DOCUMENT_TRACKING_FILE
 
 class Retriever:
     """Retrieves relevant documents based on user queries."""
@@ -14,6 +15,7 @@ class Retriever:
     def __init__(self, 
                  embedding_generator: Optional[EmbeddingGenerator] = None,
                  vector_store: Optional[VectorStore] = None,
+                 document_tracker: Optional[DocumentTracker] = None,
                  max_docs: Optional[int] = None):
         """
         Initialize retriever with embedding generator and vector store.
@@ -21,10 +23,12 @@ class Retriever:
         Args:
             embedding_generator: EmbeddingGenerator instance
             vector_store: VectorStore instance
+            document_tracker: DocumentTracker instance
             max_docs: Maximum number of documents to retrieve
         """
         self.embedding_generator = embedding_generator or EmbeddingGenerator()
         self.vector_store = vector_store or VectorStore()
+        self.document_tracker = document_tracker or DocumentTracker(DOCUMENT_TRACKING_FILE)
         self.max_docs = max_docs or MAX_DOCS_TO_RETRIEVE
     
     def retrieve(self, query: str) -> List[Dict[str, Any]]:
@@ -116,20 +120,28 @@ class Retriever:
         from datetime import datetime
         return datetime.now().strftime("%Y-%m-%d")
     
-    def process_documents(self):
-        """Process and index all documents from document loader."""
+    def process_documents(self, force_reprocess=False):
+        """
+        Process and index documents for the RAG system.
+        
+        Args:
+            force_reprocess: If True, reprocess all documents regardless of tracking status
+            
+        Returns:
+            Number of document chunks processed
+        """
         from src.rag.document_loader import DocumentLoader
         from src.rag.document_processor import DocumentProcessor
         
         print("Starting document processing...")
-        print("Step 1/5: Loading sentence-transformers model (may take a minute on first run)...")
+        print("Step 1/6: Loading sentence-transformers model (may take a minute on first run)...")
         
         # Ensure the embedding model is loaded (this can take time on first run)
         _ = self.embedding_generator.model
         print("Model loaded successfully.")
         
         # Load documents
-        print("Step 2/5: Scanning for PDF documents...")
+        print("Step 2/6: Scanning for PDF documents...")
         loader = DocumentLoader()
         pdf_files = loader.scan_directory(include_subdirs=True)
         
@@ -138,33 +150,69 @@ class Retriever:
             return 0
             
         print(f"Found {len(pdf_files)} PDF files.")
+        
+        # Filter out already processed documents if not forcing reprocessing
+        if not force_reprocess:
+            print("Step 3/6: Checking for new or modified documents...")
+            unprocessed_files = self.document_tracker.get_unprocessed_documents(pdf_files)
+            
+            if not unprocessed_files:
+                print("All documents are already processed and up-to-date.")
+                return 0
+                
+            print(f"Found {len(unprocessed_files)} new or modified documents to process.")
+            pdf_files = unprocessed_files
+        else:
+            print("Step 3/6: Processing all documents (force reprocess enabled)...")
+            
+        # Get metadata for documents to process
         documents = loader.get_document_metadata(pdf_files)
         
         # Process documents
-        print(f"Step 3/5: Extracting text from {len(documents)} documents...")
+        print(f"Step 4/6: Extracting text from {len(documents)} documents...")
         processor = DocumentProcessor()
         all_chunks = []
+        processed_docs = {}  # Track processed documents and their chunk counts
         
         for i, doc in enumerate(documents):
+            file_path = doc.get('file_path')
             file_name = doc.get('file_name', f'Document {i+1}')
             print(f"  Processing {file_name} ({i+1}/{len(documents)})...")
+            
             chunks = processor.process_document(doc)
             chunk_count = len(chunks)
-            print(f"  Extracted {chunk_count} text chunks from {file_name}")
-            all_chunks.extend(chunks)
+            
+            if chunk_count > 0:
+                print(f"  Extracted {chunk_count} text chunks from {file_name}")
+                all_chunks.extend(chunks)
+                processed_docs[file_path] = chunk_count
+            else:
+                print(f"  No text chunks were extracted from {file_name}")
         
         if not all_chunks:
             print("No text chunks were extracted from the documents.")
             return 0
             
         # Generate embeddings
-        print(f"Step 4/5: Generating embeddings for {len(all_chunks)} text chunks...")
+        print(f"Step 5/6: Generating embeddings for {len(all_chunks)} text chunks...")
         print("  This may take a few minutes for large documents...")
         chunks_with_embeddings = self.embedding_generator.generate_embeddings(all_chunks)
         
         # Add to vector store
-        print("Step 5/5: Storing embeddings in vector database...")
+        print("Step 6/6: Storing embeddings in vector database...")
         self.vector_store.add_documents(chunks_with_embeddings)
         
-        print(f"Successfully processed and indexed {len(all_chunks)} document chunks.")
+        # Mark documents as processed and save tracking data
+        for file_path, chunk_count in processed_docs.items():
+            self.document_tracker.mark_document_processed(file_path, chunk_count)
+        
+        self.document_tracker.save_tracking_data()
+        
+        print(f"Successfully processed and indexed {len(all_chunks)} document chunks from {len(processed_docs)} documents.")
+        
+        # Report overall stats
+        stats = self.document_tracker.get_stats()
+        print(f"Total documents in tracking system: {stats['total_processed']}")
+        print(f"Total document chunks in tracking system: {stats['total_chunks']}")
+        
         return len(all_chunks) 

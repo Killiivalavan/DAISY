@@ -22,9 +22,10 @@ RECORDING_FILE = os.path.join(DATA_DIR, "recording.wav")
 TRANSCRIPTION_FILE = os.path.join(DATA_DIR, "transcription.txt")
 
 # Text-to-speech settings
-TTS_RATE = 200
+TTS_RATE = 150
 TTS_VOLUME = 1.0
-TTS_VOICE_ID = 1  # Female voice
+TTS_VOICE_ID = 1  # Female voice for pyttsx3
+TTS_SPEAKER_IDX = "p250"  # Voice ID for Coqui TTS (VCTK dataset)
 
 # RAG settings
 DOCUMENTS_DIR = os.path.join(BASE_DIR, "documents")
@@ -33,3 +34,4 @@ CHUNK_SIZE = 500  # Reduced chunk size for quicker processing
 CHUNK_OVERLAP = 50  # Reduced overlap for quicker processing
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 MAX_DOCS_TO_RETRIEVE = 3 
+DOCUMENT_TRACKING_FILE = os.path.join(DATA_DIR, "document_tracking.json") 

@@ -7,7 +7,7 @@ import argparse
 
 from src.utils.config import (
     ASSISTANT_NAME, TRIGGER_WORD, RECORDING_FILE, 
-    TRANSCRIPTION_FILE
+    TRANSCRIPTION_FILE, TTS_RATE, TTS_VOLUME, TTS_VOICE_ID, TTS_SPEAKER_IDX
 )
 from src.core.assistant import VoiceAssistant
 from src.voice.speech_recognition import SpeechRecognizer
@@ -21,7 +21,12 @@ class DaisyAssistant:
         self.should_run = True
         self.voice_ai = VoiceAssistant(model_name=model_name, use_rag=use_rag)
         self.speech_recognizer = SpeechRecognizer()
-        self.tts = TextToSpeech()
+        self.tts = TextToSpeech(
+            rate=TTS_RATE, 
+            volume=TTS_VOLUME, 
+            voice_id=TTS_VOICE_ID,
+            speaker_idx=TTS_SPEAKER_IDX
+        )
         
     def check_ollama_server(self):
         """Check if Ollama server is running."""
@@ -37,8 +42,9 @@ class DaisyAssistant:
         try:
             # Check for special commands
             if "process documents" in user_command.lower() or "index documents" in user_command.lower():
-                print("Processing documents for RAG...")
-                response_text = self.voice_ai.process_documents()
+                force_reprocess = "force" in user_command.lower() or "reprocess all" in user_command.lower()
+                print(f"Processing documents for RAG (force_reprocess={force_reprocess})...")
+                response_text = self.voice_ai.process_documents(force_reprocess)
             else:
                 # Normal response generation
                 response_text = self.voice_ai.get_ai_response(user_command)
@@ -95,6 +101,8 @@ def parse_arguments():
                       help="Disable RAG (Retrieval-Augmented Generation)")
     parser.add_argument("--process-docs", action="store_true",
                       help="Process documents and exit")
+    parser.add_argument("--force-reprocess", action="store_true",
+                      help="Force reprocessing of all documents")
     return parser.parse_args()
 
 def main():
@@ -109,7 +117,7 @@ def main():
     # Handle document processing option
     if args.process_docs:
         print("Processing documents for RAG...")
-        result = assistant.voice_ai.process_documents()
+        result = assistant.voice_ai.process_documents(force_reprocess=args.force_reprocess)
         print(result)
         return
     

@@ -5,10 +5,18 @@ pyttsx3>=2.90
 SpeechRecognition>=3.8.1
 requests>=2.25.1
 
+# TTS dependencies
+TTS>=0.21.0
+numpy==1.22.0
+
 # RAG dependencies
 PyPDF2>=3.0.0
 sentence-transformers>=2.2.2
 faiss-cpu>=1.7.4
 langchain>=0.0.267
 langchain-community>=0.0.13
-numpy>=1.24.0 
+
+# Audio playback dependencies
+sounddevice
+soundfile 
+pyaudio
