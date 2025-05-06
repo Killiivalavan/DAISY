@@ -19,8 +19,8 @@ if os.path.exists(espeak_path) and espeak_path not in os.environ.get("PATH", "")
     os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + espeak_path
 
 class TextToSpeech:
-    def __init__(self, rate=150, volume=1.0, voice_id=1, use_coqui=True, 
-                 model_name="tts_models/en/vctk/vits", speaker_idx="p250"):
+    def __init__(self, rate=180, volume=1.0, voice_id=1, use_coqui=True, 
+                 model_name="tts_models/en/vctk/vits", speaker_idx="p277"):
         """
         Initialize the TTS engine with Coqui-AI TTS (primary) and pyttsx3 (fallback).
         
@@ -246,113 +246,139 @@ class TextToSpeech:
         
         return cleaned_text
     
-    def speak(self, text: str):
+    def speak(self, text: str, block=True):
         """
-        Converts text to speech and plays it.
+        Convert text to speech and play it.
         
         Args:
-            text: The text to convert to speech
+            text: Text to speak
+            block: Whether to block until speech is complete
         """
-        # Preprocess text before speaking
-        cleaned_text = self.clean_text_for_speech(text)
-        
-        if not cleaned_text:
-            logger.warning("Empty text provided to speak method, skipping")
+        if not text:
+            logger.warning("Empty text provided to speak method")
             return
             
+        # Clean and prepare text for speech
+        cleaned_text = self.clean_text_for_speech(text)
+        
         try:
-            # Use Coqui-AI TTS if available
             if self.using_coqui:
-                logger.debug(f"Speaking with Coqui-AI TTS: {cleaned_text[:30]}...")
-                
-                # Create a temporary file for the audio
-                import tempfile
-                import os
-                import sounddevice as sd
-                import soundfile as sf
-                
-                # Create a temporary WAV file
-                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
-                    temp_path = temp_file.name
-                
-                logger.info(f"Saving audio to temporary file: {temp_path}")
-                
-                # Use the proper TTS API method to generate audio directly to a file
-                if hasattr(self.coqui_tts, "tts_to_file"):
-                    # Determine arguments based on model capabilities
-                    if hasattr(self.coqui_tts, "speakers") and self.coqui_tts.speakers:
-                        # Multi-speaker model
-                        self.coqui_tts.tts_to_file(
-                            text=cleaned_text, 
-                            speaker=self.speaker_idx,
-                            file_path=temp_path
-                        )
-                    else:
-                        # Single-speaker model
-                        self.coqui_tts.tts_to_file(
-                            text=cleaned_text,
-                            file_path=temp_path
-                        )
+                if hasattr(self.coqui_tts, "speakers") and self.coqui_tts.speakers:
+                    # Multi-speaker model
+                    self.coqui_tts.tts_to_file(
+                        text=cleaned_text,
+                        speaker=self.speaker_idx,
+                        file_path="output.wav"
+                    )
                 else:
-                    # Generate audio with tts() method and save it manually
-                    if hasattr(self.coqui_tts, "speakers") and self.coqui_tts.speakers:
-                        # Multi-speaker model
-                        wav = self.coqui_tts.tts(text=cleaned_text, speaker=self.speaker_idx)
-                    else:
-                        # Single-speaker model
-                        wav = self.coqui_tts.tts(text=cleaned_text)
-                    
-                    # Save the audio manually
-                    import numpy as np
-                    sample_rate = 22050  # Default for TTS
-                    
-                    # Process the returned audio data
-                    if isinstance(wav, np.ndarray):
-                        sf.write(temp_path, wav, sample_rate)
-                    elif isinstance(wav, list) and len(wav) > 0:
-                        # If it's a list of audio arrays, join them
-                        try:
-                            wav_array = np.concatenate([np.array(chunk) for chunk in wav])
-                            sf.write(temp_path, wav_array, sample_rate)
-                        except:
-                            logger.warning("Could not concatenate audio chunks, using first chunk")
-                            sf.write(temp_path, np.array(wav[0]), sample_rate)
+                    # Single speaker model
+                    self.coqui_tts.tts_to_file(
+                        text=cleaned_text,
+                        file_path="output.wav"
+                    )
                 
-                # Play the audio file - this will block until audio is finished
-                try:
-                    logger.info(f"Playing audio from {temp_path}")
-                    data, fs = sf.read(temp_path)
-                    sd.play(data, fs)
-                    sd.wait()  # This blocks until audio is finished
-                    logger.info("Audio playback completed")
-                finally:
-                    # Clean up the temporary file
-                    try:
-                        os.unlink(temp_path)
-                        logger.debug(f"Removed temporary file: {temp_path}")
-                    except Exception as e:
-                        logger.warning(f"Could not remove temporary file: {e}")
+                # Play the generated audio file
+                self._play_audio_file("output.wav", block=block)
             else:
-                # Fall back to pyttsx3
-                logger.debug(f"Speaking with pyttsx3: {cleaned_text[:30]}...")
+                # Use pyttsx3 for speech
                 self.engine.say(cleaned_text)
-                self.engine.runAndWait()
                 
+                # If non-blocking is requested, run in a separate thread
+                if block:
+                    self.engine.runAndWait()
+                else:
+                    import threading
+                    threading.Thread(target=self.engine.runAndWait, daemon=True).start()
+                    
         except Exception as e:
-            logger.error(f"Error in TTS: {e}")
+            logger.error(f"Error during speech synthesis: {e}")
             
-            # If Coqui fails, fallback to pyttsx3 for this particular text
+            # If Coqui failed, fall back to pyttsx3 for this request
             if self.using_coqui:
-                logger.info("Temporarily falling back to pyttsx3 for this text")
+                logger.info("Falling back to pyttsx3 for this request")
                 try:
                     if not hasattr(self, 'engine'):
                         self.engine = pyttsx3.init()
-                        self.engine.setProperty('rate', 200)
+                        self.engine.setProperty('rate', 180)
                         self.engine.setProperty('volume', 1.0)
                         voices = self.engine.getProperty('voices')
                         self.engine.setProperty('voice', voices[1].id)
                     
                     self.engine.say(cleaned_text)
-                    self.engine.runAndWait()
+                    
+                    if block:
+                        self.engine.runAndWait()
+                    else:
+                        import threading
+                        threading.Thread(target=self.engine.runAndWait, daemon=True).start()
                 except Exception as fallback_error:
-                    logger.error(f"Fallback TTS also failed: {fallback_error}") 
+                    logger.error(f"Fallback speech also failed: {fallback_error}")
+    
+    def _play_audio_file(self, file_path, block=True):
+        """
+        Play audio file using appropriate platform-specific method.
+        
+        Args:
+            file_path: Path to audio file
+            block: Whether to block until audio is complete
+        """
+        if not os.path.exists(file_path):
+            logger.error(f"Audio file not found: {file_path}")
+            return
+            
+        try:
+            # Use platform-specific audio playback
+            if os.name == 'nt':  # Windows
+                # Use winsound for Windows
+                import winsound
+                if block:
+                    winsound.PlaySound(file_path, winsound.SND_FILENAME)
+                else:
+                    import threading
+                    threading.Thread(
+                        target=winsound.PlaySound, 
+                        args=(file_path, winsound.SND_FILENAME),
+                        daemon=True
+                    ).start()
+            else:  # macOS, Linux, etc.
+                # Try to use playsound, fallback to sox/aplay
+                try:
+                    from playsound import playsound
+                    if block:
+                        playsound(file_path)
+                    else:
+                        import threading
+                        threading.Thread(target=playsound, args=(file_path,), daemon=True).start()
+                except ImportError:
+                    # Fallback to system commands
+                    import subprocess
+                    import platform
+                    
+                    system = platform.system()
+                    if system == 'Darwin':  # macOS
+                        cmd = ['afplay', file_path]
+                    else:  # Linux and others
+                        # Try aplay, then mpg123, then fall back to sox
+                        if self._command_exists('aplay'):
+                            cmd = ['aplay', file_path]
+                        elif self._command_exists('mpg123'):
+                            cmd = ['mpg123', file_path]
+                        else:
+                            cmd = ['play', file_path]  # sox command
+                    
+                    if block:
+                        subprocess.call(cmd)
+                    else:
+                        subprocess.Popen(cmd)
+        except Exception as e:
+            logger.error(f"Error playing audio file: {e}")
+    
+    def _command_exists(self, cmd):
+        """Check if a command exists by trying to run it."""
+        try:
+            subprocess.check_call(['which', cmd], 
+                                  stdout=subprocess.DEVNULL, 
+                                  stderr=subprocess.DEVNULL)
+            return True
+        except subprocess.CalledProcessError:
+            return False 

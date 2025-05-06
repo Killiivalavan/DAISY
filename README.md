@@ -69,6 +69,27 @@ python daisy.py --debug --model llama3.2:latest
 
 Once running, activate DAISY by saying "Hey DAISY" and then ask your question.
 
+### Wake Word Detection
+
+DAISY supports wake word detection using Picovoice's Porcupine engine, allowing a true hands-free experience:
+
+1. **Setup**:
+   - Copy `.env.example` to `.env`
+   - Get a free Porcupine access key from [Picovoice Console](https://console.picovoice.ai/)
+   - Add your access key to the `.env` file
+
+2. **Usage**:
+   - Start DAISY normally
+   - Say "Hey DAISY" to activate (no need to press any keys)
+   - DAISY will indicate when it's listening for your command
+   - Speak your command after wake word detection
+
+3. **Command-line Options**:
+   - `--no-wake-word`: Disable wake word detection (use manual activation)
+   - `--wake-word-sensitivity=0.7`: Adjust wake word detection sensitivity (0.0-1.0)
+
+The wake word model is already included in the `models` directory.
+
 ### Testing the TTS Engine
 
 To test the TTS engine separately:

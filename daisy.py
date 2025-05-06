@@ -16,6 +16,15 @@ def main():
                         help="Disable RAG (Retrieval-Augmented Generation)")
     parser.add_argument("--process-docs", action="store_true",
                         help="Process documents and exit")
+    parser.add_argument("--no-wake-word", action="store_true",
+                        help="Disable wake word detection even if available")
+    parser.add_argument("--wake-word-sensitivity", type=float, 
+                        help="Wake word detection sensitivity (0.0-1.0)")
+    parser.add_argument("--whisper-model", type=str, 
+                        choices=["tiny", "base", "small", "medium", "large-v2", "large-v3"],
+                        help="Specify the Whisper model size (default: from config)")
+    parser.add_argument("--vad-mode", type=int, choices=[0, 1, 2, 3], 
+                        help="Set VAD aggressiveness (0=least aggressive, 3=most aggressive)")
     args = parser.parse_args()
     
     # Add src directory to path
@@ -27,6 +36,11 @@ def main():
         print(f"Debug mode enabled")
         print(f"Using model: {args.model}")
         print(f"RAG enabled: {not args.no_rag}")
+        print(f"Wake word detection: {'disabled' if args.no_wake_word else 'enabled'}")
+        if args.wake_word_sensitivity:
+            print(f"Wake word sensitivity: {args.wake_word_sensitivity}")
+        if args.whisper_model:
+            print(f"Whisper model: {args.whisper_model}")
         print(f"Current directory: {current_dir}")
         print(f"Source directory: {src_dir}")
         print(f"Python path: {sys.path}")
