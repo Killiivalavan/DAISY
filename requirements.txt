@@ -2,16 +2,15 @@
 torch>=1.13.0
 torchaudio>=0.13.0
 pyttsx3>=2.90
-# SpeechRecognition removed - using sounddevice directly
 requests>=2.25.1
-faster-whisper==1.1.1  # Added for better transcription
-webrtcvad>=2.0.10      # Added for improved voice activity detection
-pvporcupine>=3.0.0     # Added for wake word detection
-python-dotenv>=0.21.0  # Added for environment variable management
+faster-whisper==1.1.1  # For better transcription
+webrtcvad>=2.0.10      # For improved voice activity detection
+pvporcupine>=3.0.0     # For wake word detection
+python-dotenv>=0.21.0  # For environment variable management
 
 # TTS dependencies
 TTS>=0.21.0
-numpy==1.22.0
+numpy>=1.22.0
 
 # RAG dependencies
 PyPDF2>=3.0.0
@@ -20,10 +19,9 @@ faiss-cpu>=1.7.4
 langchain>=0.0.267
 langchain-community>=0.0.13
 
-# Audio playback dependencies
+# Audio dependencies
 sounddevice>=0.4.5  # For direct microphone access
 soundfile>=0.11.0   # For audio file operations
-# pyaudio            # No longer needed, sounddevice handles audio I/O
 
 # GUI dependencies
 PyQt6>=6.4.0

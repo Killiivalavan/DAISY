@@ -105,7 +105,8 @@ class Retriever:
                             f"You have access to the following document excerpts to help answer the user's question.\n" \
                             f"---\n{context}\n---\n" \
                             f"Always cite your sources by referencing the document number when providing information from these documents.\n" \
-                            f"If the documents don't contain relevant information, just say so and answer based on your knowledge.\n"
+                            f"If the documents don't contain relevant information, just say so and answer based on your knowledge.\n" \
+                            f"IMPORTANT: Always provide a proper, helpful response. Never respond with placeholders like '*No response*', '*Silence*', or similar non-responses.\n"
         
         # Create messages for the LLM
         messages = [
@@ -215,4 +216,4 @@ class Retriever:
         print(f"Total documents in tracking system: {stats['total_processed']}")
         print(f"Total document chunks in tracking system: {stats['total_chunks']}")
         
-        return len(all_chunks) 
+        return len(all_chunks)

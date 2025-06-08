@@ -14,6 +14,8 @@ from src.utils.config import (
 from src.core.assistant import VoiceAssistant
 from src.voice.speech_recognition import SpeechRecognizer
 from src.voice.text_to_speech import TextToSpeech
+from src.utils.resource_manager import cleanup_all_resources
+from src.utils.error_handler import error_context, graceful_degradation, safe_execute
 
 class DaisyAssistant:
     """Main DAISY voice assistant class."""
@@ -33,10 +35,10 @@ class DaisyAssistant:
             speaker_idx=TTS_SPEAKER_IDX
         )
         
-        # Use provided whisper_model_size or default from config
+        # Use provided whisper_model_size or default from config  
         self.speech_recognizer = SpeechRecognizer(
-            model_size=whisper_model_size or WHISPER_MODEL_SIZE,
-            beam_size=WHISPER_BEAM_SIZE,
+            model_name=whisper_model_size or WHISPER_MODEL_SIZE,
+            device="cpu",  # Use CPU for now, could be enhanced later for GPU detection
             use_wake_word=use_wake_word
         )
         
@@ -55,14 +57,31 @@ class DaisyAssistant:
         print("Initializing voice assistant...")
         self.voice_ai = VoiceAssistant(model_name=model_name, use_rag=use_rag)
         
-        # In debug mode, print audio device information
+        # In debug mode, print comprehensive system information
         if debug:
-            print("Audio device information:")
+            print("\n=== DAISY System Information ===")
+            
+            # Wake word status
+            print("\n--- Wake Word Detection ---")
+            if self.speech_recognizer.wake_word_detector:
+                wake_status = self.speech_recognizer.wake_word_detector.get_status_info()
+                print(f"Available: {wake_status['available']}")
+                if wake_status['error']:
+                    print(f"Error: {wake_status['error']}")
+                if wake_status['available']:
+                    print(f"Sensitivity: {wake_status['sensitivity']}")
+                    print(f"Sample rate: {wake_status['sample_rate']}")
+                    print(f"Frame length: {wake_status['frame_length']}")
+            else:
+                print(f"Disabled: {self.speech_recognizer.wake_word_fallback_reason}")
+            
+            # Audio device information
+            print("\n--- Audio Device Information ---")
             device_info = self.speech_recognizer.get_device_info()
             
             # Check if there was an error getting device info
             if device_info.get('error'):
-                print(f"Could not retrieve complete audio device info: {device_info['error']}")
+                print(f"Warning: {device_info['error']}")
             
             # Safely access device info with fallbacks
             default_input = "Unknown"
@@ -74,12 +93,26 @@ class DaisyAssistant:
             print(f"Default input device: {default_input}")
             print(f"Audio API: {device_info.get('api', 'Unknown')}")
             print(f"Sample rate: {self.speech_recognizer.sample_rate}")
-            print(f"Whisper model size: {whisper_model_size or WHISPER_MODEL_SIZE}")
+            print(f"VAD mode: {getattr(self.speech_recognizer, 'vad_mode', 'Unknown')}")
+            print(f"Frame duration: {getattr(self.speech_recognizer, 'frame_duration_ms', 'Unknown')} ms")
             
-            if self.use_wake_word:
-                print(f"Wake word detection: {'enabled' if self.speech_recognizer.use_wake_word else 'disabled'}")
-                if self.speech_recognizer.wake_word_detector:
-                    print(f"Wake word sensitivity: {self.speech_recognizer.wake_word_detector.sensitivity}")
+            # Whisper information  
+            print("\n--- Speech Recognition ---")
+            print(f"Whisper model size: {whisper_model_size or WHISPER_MODEL_SIZE}")
+            print(f"Use wake word: {self.use_wake_word}")
+            
+            # Chat history statistics
+            print("\n--- Chat History ---")
+            history_stats = self.voice_ai.chat_history.get_statistics()
+            print(f"Total messages: {history_stats['total_messages']}")
+            print(f"User messages: {history_stats['user_messages']}")
+            print(f"Assistant messages: {history_stats['assistant_messages']}")
+            if history_stats['total_messages'] > 0:
+                print(f"Total characters: {history_stats['total_characters']}")
+                if history_stats['oldest_message']:
+                    print(f"Oldest message: {history_stats['oldest_message']}")
+            
+            print("================================\n")
         
     def check_ollama_server(self):
         """Check if Ollama server is running."""
@@ -91,11 +124,7 @@ class DaisyAssistant:
     
     def process_command(self, user_command):
         """Process user command and generate response."""
-        try:
-            # Give immediate feedback that we're processing
-            self.tts.speak("Let me think about that", block=False)
-            print('Thinking...')
-            
+        with error_context("process_command", reraise=False):
             # Check for special commands
             if "process documents" in user_command.lower() or "index documents" in user_command.lower():
                 force_reprocess = "force" in user_command.lower() or "reprocess all" in user_command.lower()
@@ -107,18 +136,12 @@ class DaisyAssistant:
                 
             if response_text:
                 print(f"{ASSISTANT_NAME.upper()}: {response_text}")
-                self.tts.speak(response_text)
+                with error_context("tts_speak", reraise=False):
+                    self.tts.speak(response_text)
             else:
                 error_msg = "I'm having trouble connecting to my brain right now. Please try again."
                 print(f"{ASSISTANT_NAME.upper()}: {error_msg}")
-                self.tts.speak(error_msg)
-        except Exception as e:
-            print(f"Error generating response: {e}")
-            error_msg = "I encountered an error while processing your request."
-            print(f"{ASSISTANT_NAME.upper()}: {error_msg}")
-            self.tts.speak(error_msg)
-            if self.debug:
-                print("Make sure Ollama is running with: 'ollama serve'")
+                safe_execute(self.tts.speak, error_msg, error_message="Failed to speak error message")
     
     def run(self):
         """Main loop for the voice assistant."""
@@ -156,36 +179,58 @@ class DaisyAssistant:
         if self.voice_ai.ollama_available:
             self.tts.speak("I'm ready to assist you")
         
-        while self.should_run:
-            # Listen for audio
-            if self.debug:
-                print("Starting listening...")
-                
-            audio_file = self.speech_recognizer.listen()
-            
-            if audio_file:
-                # Transcribe audio to text
+        try:
+            while self.should_run:
+                # Listen for audio
                 if self.debug:
-                    print(f"Transcribing audio from {audio_file}...")
+                    print("Starting listening...")
                     
-                user_command = self.speech_recognizer.transcribe(audio_file)
+                with graceful_degradation(operation_name="audio_listening"):
+                    audio_file = self.speech_recognizer.listen()
+                    
+                    if audio_file:
+                        # Transcribe audio to text
+                        if self.debug:
+                            print(f"Transcribing audio from {audio_file}...")
+                            
+                        with graceful_degradation(operation_name="audio_transcription"):
+                            user_command = self.speech_recognizer.transcribe(audio_file)
+                            
+                            if user_command:
+                                if self.use_wake_word:
+                                    # With wake word, we can process the command directly
+                                    self.process_command(user_command)
+                                else:
+                                    # Without wake word, check for trigger word in the command
+                                    if TRIGGER_WORD.lower() in user_command.lower():
+                                        safe_execute(self.tts.speak, "I'm listening!", 
+                                                   error_message="Failed to speak acknowledgment")
+                                    else:
+                                        # Process the command
+                                        self.process_command(user_command)
                 
-                if user_command:
-                    if self.use_wake_word:
-                        # With wake word, we can process the command directly
-                        self.process_command(user_command)
-                    else:
-                        # Without wake word, check for trigger word in the command
-                        if TRIGGER_WORD.lower() in user_command.lower():
-                            self.tts.speak("I'm listening!")
-                        else:
-                            # Process the command
-                            self.process_command(user_command)
-            
-            # Short delay to prevent CPU overuse
-            time.sleep(0.1)
+                # Short delay to prevent CPU overuse
+                time.sleep(0.1)
+                
+        except KeyboardInterrupt:
+            print("\nShutting down gracefully...")
+            self.should_run = False
+        finally:
+            self.cleanup()
         
-        self.tts.speak('See you later, alligator!')
+        safe_execute(self.tts.speak, 'See you later, alligator!', 
+                    error_message="Failed to speak goodbye message")
+    
+    def cleanup(self):
+        """Clean up resources."""
+        print("Cleaning up resources...")
+        
+        # Clean up voice assistant
+        if hasattr(self, 'voice_ai'):
+            safe_execute(self.voice_ai.cleanup, error_message="Failed to cleanup voice assistant")
+        
+        # Clean up global resources
+        safe_execute(cleanup_all_resources, error_message="Failed to cleanup global resources")
 
 def parse_arguments():
     """Parse command line arguments."""

@@ -1,4 +1,9 @@
-# Python specific
+# ==================================================
+# DAISY Voice Assistant - Comprehensive .gitignore
+# ==================================================
+
+# ===== PYTHON ENVIRONMENT =====
+# Python cache and compiled files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -21,15 +26,21 @@ wheels/
 *.egg
 MANIFEST
 
+# Virtual environments
+.env
+!.env.example
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+virtualenv/
+venv310/
+
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov/
@@ -44,28 +55,91 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# Environments
-.env
-!.env.example
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-virtualenv/
-venv310/
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Project specific
+# ===== AI/ML MODELS AND CACHE =====
+# Hugging Face transformers cache (auto-downloaded models)
+models/models--*/
+models/.locks/
+src/voice/models/models--*/
+src/voice/models/.locks/
+
+# Large model binaries (>10MB)
+*.bin
+!models/hey-daisy_en_windows_v3_0_0.ppn
+!models/*.ppn
+
+# Model downloads and cache
+.cache/
+cache/
+transformers_cache/
+huggingface_hub/
+
+# ===== VECTOR DATABASE AND RAG =====
+# FAISS vector database (regenerated from documents)
+vector_db/
+!vector_db/README.md
+!vector_db/.gitkeep
+
+# Document processing tracking
+document_tracking.json
+
+# ===== AUDIO FILES AND CACHE =====
+# TTS cache (temporary generated audio)
+src/voice/cache/
+cache/
+*.wav
+*.mp3
+*.flac
+*.ogg
+!voice\ samples/
+!voice\ samples/*.wav
+
+# Recording files (temporary)
+data/recording.wav
+data/simple_recording.wav
+data/*.wav
+data/*.mp3
+
+# ===== LOGS AND TEMPORARY FILES =====
+# Application logs
+*.log
+logs/
+speech_recognition.log
+
+# Chat history backups
+data/chat_history.json.backup
+chat_history.json.backup
+
+# Temporary files
+temp_*
+*.tmp
+*.temp
+
+# ===== DOCUMENTS (SIZE-BASED EXCLUSION) =====
+# Large PDF files (>5MB) - users should manage their own documents
+documents/**/*.pdf
+!documents/**/README.md
+!documents/**/*.txt
+!documents/**/*.md
+
+# Keep small documents and documentation
+!documents/README.md
+
+# ===== DATA DIRECTORY MANAGEMENT =====
+# Keep structure but exclude large/temporary files
 data/*
-!data/.gitkeep
 !data/README.md
-recording.wav
+!data/.gitkeep
+
+# Exclude transcription and output files
 transcription.txt
-chat_history.json
 outputs/
 checkpoints/
 
+# ===== IDE AND SYSTEM FILES =====
 # IDE specific files
 .idea/
 .vscode/
@@ -76,56 +150,40 @@ checkpoints/
 # OS specific files
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# Windows folder config files
+Folder.jpg
+AlbumArt_{*}.jpg
+AlbumArtSmall.jpg
 
-# C extensions
-*.so
+# ===== PROJECT SPECIFIC EXCLUSIONS =====
+# Debug and test files
+debug_*.py
+test_output/
+profiling_results/
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# Backup files
+*.backup
+*.bak
+original_*
 
-# Virtual Environment
-venv/
-env/
-ENV/
-.env
-!.env.example
-.venv
-env.bak/
-venv.bak/
-virtualenv/
+# Environment and config
+.env.local
+.env.production
+config.local.json
 
-# Project specific files
-data/*
-!data/.gitkeep
-!data/README.md
-recording.wav
-transcription.txt
-chat_history.json
-outputs/
-checkpoints/
+# ===== LARGE FILES SAFEGUARD =====
+# Safeguard against any large files (>50MB)
+# This is a catch-all for files that might slip through
+**/large_files/
+**/*_large.*
+**/*.large
 
-# IDE specific files
-.idea/
-.vscode/
-*.swp
-*.swo 
+# Specific large file extensions
+*.iso
+*.dmg
+*.tar.gz
+*.zip
+*.7z
+*.rar 

@@ -7,6 +7,9 @@ import re
 import torch
 import pyttsx3
 from typing import Dict, List, Tuple, Optional
+import time
+import soundfile as sf
+from src.utils.resource_manager import managed_temp_file, get_resource_tracker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -20,82 +23,51 @@ if os.path.exists(espeak_path) and espeak_path not in os.environ.get("PATH", "")
 
 class TextToSpeech:
     def __init__(self, rate=180, volume=1.0, voice_id=1, use_coqui=True, 
-                 model_name="tts_models/en/vctk/vits", speaker_idx="p277"):
-        """
-        Initialize the TTS engine with Coqui-AI TTS (primary) and pyttsx3 (fallback).
-        
-        Args:
-            rate: Speech rate for pyttsx3 (words per minute)
-            volume: Volume level (0.0 to 1.0)
-            voice_id: Voice ID for pyttsx3
-            use_coqui: Whether to try using Coqui-AI TTS (set to False to force pyttsx3)
-            model_name: Coqui TTS model to use (default is VITS with VCTK voices)
-            speaker_idx: Speaker ID for multi-speaker models (p250 is the selected voice)
-        """
-        # Flag to track which engine is active
-        self.using_coqui = False
-        self.coqui_tts = None
+                 speaker_idx=None, cache_size=100):
+        """Initialize TTS with caching and optimization."""
+        self.rate = rate
+        self.volume = volume
+        self.voice_id = voice_id
+        self.use_coqui = use_coqui
         self.speaker_idx = speaker_idx
         
-        # Try to initialize Coqui-AI TTS if requested
+        # TTS caching
+        self.cache_dir = os.path.join(os.path.dirname(__file__), "cache", "tts")
+        os.makedirs(self.cache_dir, exist_ok=True)
+        self.cache_size = cache_size
+        self.cache = {}
+        
+        # Initialize TTS engine
         if use_coqui:
             try:
-                logger.info(f"Initializing Coqui-AI TTS with model {model_name}...")
-                # Explicitly check if espeak-ng is accessible
-                espeak_found = False
-                for path_dir in os.environ.get("PATH", "").split(os.pathsep):
-                    if os.path.exists(os.path.join(path_dir, "espeak-ng.exe")):
-                        espeak_found = True
-                        logger.info(f"Found espeak-ng at: {os.path.join(path_dir, 'espeak-ng.exe')}")
-                        break
-                
-                if not espeak_found:
-                    logger.warning("espeak-ng not found in PATH. Trying direct check...")
-                    if os.path.exists(os.path.join(espeak_path, "espeak-ng.exe")):
-                        logger.info(f"Found espeak-ng at expected location: {os.path.join(espeak_path, 'espeak-ng.exe')}")
-                        # Add it to PATH again to be sure
-                        os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + espeak_path
-                    else:
-                        logger.error(f"espeak-ng not found at {os.path.join(espeak_path, 'espeak-ng.exe')}")
-                        raise FileNotFoundError("espeak-ng.exe not found in PATH or expected location")
-                
-                # Lazy import to avoid import errors if TTS is not installed
                 from TTS.api import TTS
+                logger.info("Initializing Coqui-AI TTS with model tts_models/en/vctk/vits...")
                 
-                # Get device
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                logger.info(f"Using device: {device}")
+                # Check for espeak-ng
+                espeak_path = self._find_espeak()
+                if espeak_path:
+                    logger.info(f"Found espeak-ng at: {espeak_path}")
+                    os.environ["PHONEMIZER_ESPEAK_PATH"] = espeak_path
                 
-                # Initialize TTS
-                self.coqui_tts = TTS(model_name).to(device)
+                # Initialize TTS with optimized settings
+                self.tts = TTS(
+                    model_name="tts_models/en/vctk/vits",
+                    progress_bar=False,  # Disable progress bar for faster initialization
+                    gpu=torch.cuda.is_available()  # Use GPU if available
+                )
                 
-                # Validate speaker_idx if it's a multi-speaker model
-                if hasattr(self.coqui_tts, "speakers") and self.coqui_tts.speakers:
-                    if speaker_idx not in self.coqui_tts.speakers:
-                        available_speakers = self.coqui_tts.speakers
-                        logger.warning(f"Speaker {speaker_idx} not found. Available speakers: {available_speakers}")
-                        # Use the first available speaker if the requested one isn't available
-                        self.speaker_idx = available_speakers[0]
-                        logger.info(f"Using speaker {self.speaker_idx} instead")
-                    else:
-                        logger.info(f"Using speaker: {speaker_idx}")
+                # Set speaker
+                if speaker_idx is not None:
+                    logger.info(f"Using speaker: p{speaker_idx}")
+                    self.speaker_idx = speaker_idx
                 
-                self.using_coqui = True
                 logger.info("Coqui-AI TTS initialized successfully")
             except Exception as e:
-                logger.error(f"Failed to initialize Coqui-AI TTS: {e}")
-                logger.info("Falling back to pyttsx3")
-                self.using_coqui = False
-        
-        # Initialize pyttsx3 as fallback
-        if not self.using_coqui:
-            logger.info("Initializing pyttsx3...")
-            self.engine = pyttsx3.init()
-            self.engine.setProperty('rate', rate)
-            self.engine.setProperty('volume', volume)
-            voices = self.engine.getProperty('voices')
-            self.engine.setProperty('voice', voices[voice_id].id)
-            logger.info("pyttsx3 initialized successfully")
+                logger.error(f"Error initializing Coqui TTS: {e}")
+                self.use_coqui = False
+                self._init_pyttsx3()
+        else:
+            self._init_pyttsx3()
         
         # Define patterns for text cleaning
         self.cleaning_patterns = [
@@ -155,9 +127,9 @@ class TextToSpeech:
     
     def list_available_voices(self):
         """List available voices from the current TTS engine."""
-        if self.using_coqui:
-            if hasattr(self.coqui_tts, "speakers") and self.coqui_tts.speakers:
-                return self.coqui_tts.speakers
+        if self.use_coqui:
+            if hasattr(self.tts, "speakers") and self.tts.speakers:
+                return self.tts.speakers
             else:
                 return ["Single speaker model"]
         else:
@@ -175,20 +147,20 @@ class TextToSpeech:
         Returns:
             bool: True if voice was changed successfully, False otherwise
         """
-        if self.using_coqui and speaker_idx:
-            if hasattr(self.coqui_tts, "speakers") and self.coqui_tts.speakers:
-                if speaker_idx in self.coqui_tts.speakers:
+        if self.use_coqui and speaker_idx:
+            if hasattr(self.tts, "speakers") and self.tts.speakers:
+                if speaker_idx in self.tts.speakers:
                     self.speaker_idx = speaker_idx
                     logger.info(f"Voice changed to: {speaker_idx}")
                     return True
                 else:
-                    available_speakers = self.coqui_tts.speakers
+                    available_speakers = self.tts.speakers
                     logger.warning(f"Speaker {speaker_idx} not found. Available speakers: {available_speakers}")
                     return False
             else:
                 logger.warning("Current TTS model doesn't support multiple speakers")
                 return False
-        elif not self.using_coqui and voice_id is not None:
+        elif not self.use_coqui and voice_id is not None:
             try:
                 voices = self.engine.getProperty('voices')
                 if 0 <= voice_id < len(voices):
@@ -246,73 +218,150 @@ class TextToSpeech:
         
         return cleaned_text
     
-    def speak(self, text: str, block=True):
-        """
-        Convert text to speech and play it.
+    def _get_cache_key(self, text, rate=None, volume=None):
+        """Generate a cache key for TTS output."""
+        # Normalize text and parameters
+        text = text.strip().lower()
+        rate = rate or self.rate
+        volume = volume or self.volume
+        return hash(f"{text}:{rate}:{volume}:{self.voice_id}:{self.speaker_idx}")
         
-        Args:
-            text: Text to speak
-            block: Whether to block until speech is complete
-        """
+    def _get_cached_audio(self, cache_key):
+        """Get cached audio file if it exists."""
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+            
+        cache_file = os.path.join(self.cache_dir, f"{cache_key}.wav")
+        if os.path.exists(cache_file):
+            self.cache[cache_key] = cache_file
+            return cache_file
+        return None
+        
+    def _cache_audio(self, cache_key, audio_file):
+        """Cache audio file."""
+        if len(self.cache) >= self.cache_size:
+            # Remove oldest entry
+            oldest_key = next(iter(self.cache))
+            try:
+                os.remove(self.cache[oldest_key])
+            except:
+                pass
+            del self.cache[oldest_key]
+            
+        self.cache[cache_key] = audio_file
+        
+    def speak(self, text, block=True, rate=None, volume=None):
+        """Optimized speech synthesis with caching."""
         if not text:
-            logger.warning("Empty text provided to speak method")
             return
             
-        # Clean and prepare text for speech
-        cleaned_text = self.clean_text_for_speech(text)
+        # Generate cache key
+        cache_key = self._get_cache_key(text, rate, volume)
+        
+        # Check cache first
+        cached_file = self._get_cached_audio(cache_key)
+        if cached_file:
+            logger.debug("Using cached TTS output")
+            self._play_audio_file(cached_file, block)
+            return
+            
+        # Generate new audio
+        try:
+            # Split text into sentences for better processing
+            sentences = self._split_into_sentences(text)
+            logger.debug(f"Text splitted to sentences.\n{sentences}")
+            
+            # Process sentences in parallel if not blocking
+            if not block and len(sentences) > 1:
+                import threading
+                threads = []
+                for sentence in sentences:
+                    thread = threading.Thread(
+                        target=self._process_sentence,
+                        args=(sentence, rate, volume)
+                    )
+                    thread.daemon = True
+                    thread.start()
+                    threads.append(thread)
+                    
+                # Wait for all threads if blocking
+                if block:
+                    for thread in threads:
+                        thread.join()
+                return
+                
+            # Process single sentence or blocking mode
+            audio_file = self._process_sentence(text, rate, volume)
+            
+            # Cache the result
+            if audio_file:
+                self._cache_audio(cache_key, audio_file)
+                
+        except Exception as e:
+            logger.error(f"Error in speech synthesis: {e}")
+            # Fallback to pyttsx3
+            if self.use_coqui:
+                logger.info("Falling back to pyttsx3")
+                self.use_coqui = False
+                self._init_pyttsx3()
+                self.speak(text, block, rate, volume)
+                
+    def _process_sentence(self, text, rate=None, volume=None):
+        """Process a single sentence with timing information."""
+        start_time = time.time()
         
         try:
-            if self.using_coqui:
-                if hasattr(self.coqui_tts, "speakers") and self.coqui_tts.speakers:
-                    # Multi-speaker model
-                    self.coqui_tts.tts_to_file(
-                        text=cleaned_text,
-                        speaker=self.speaker_idx,
-                        file_path="output.wav"
-                    )
-                else:
-                    # Single speaker model
-                    self.coqui_tts.tts_to_file(
-                        text=cleaned_text,
-                        file_path="output.wav"
-                    )
+            if self.use_coqui:
+                # Generate unique filename
+                temp_file = os.path.join(
+                    self.cache_dir,
+                    f"temp_{int(time.time() * 1000)}_{hash(text)}.wav"
+                )
                 
-                # Play the generated audio file
-                self._play_audio_file("output.wav", block=block)
+                # Ensure rate is not None and is a valid number
+                rate = rate or self.rate
+                if not isinstance(rate, (int, float)) or rate <= 0:
+                    rate = self.rate
+                
+                # Generate speech with optimized settings
+                self.tts.tts_to_file(
+                    text=text,
+                    file_path=temp_file,
+                    speaker=self.speaker_idx,
+                    speed=max(0.5, min(2.0, rate/180.0))  # Clamp speed between 0.5x and 2.0x
+                )
+                
+                # Play the audio
+                self._play_audio_file(temp_file, True)
+                
+                # Log timing information
+                processing_time = time.time() - start_time
+                audio_duration = len(sf.read(temp_file)[0]) / self.tts.synthesizer.output_sample_rate
+                rtf = processing_time / audio_duration
+                logger.debug(f"Processing time: {processing_time}")
+                logger.debug(f"Real-time factor: {rtf}")
+                
+                return temp_file
             else:
-                # Use pyttsx3 for speech
-                self.engine.say(cleaned_text)
+                # Use pyttsx3
+                rate = rate or self.rate
+                if not isinstance(rate, (int, float)) or rate <= 0:
+                    rate = self.rate
+                    
+                self.engine.setProperty('rate', rate)
+                self.engine.setProperty('volume', volume or self.volume)
+                self.engine.setProperty('voice', self.voices[self.voice_id].id)
                 
-                # If non-blocking is requested, run in a separate thread
                 if block:
+                    self.engine.say(text)
                     self.engine.runAndWait()
                 else:
-                    import threading
-                    threading.Thread(target=self.engine.runAndWait, daemon=True).start()
+                    self.engine.say(text)
+                    self.engine.startLoop(False)
                     
         except Exception as e:
-            logger.error(f"Error during speech synthesis: {e}")
-            
-            # If Coqui failed, fall back to pyttsx3 for this request
-            if self.using_coqui:
-                logger.info("Falling back to pyttsx3 for this request")
-                try:
-                    if not hasattr(self, 'engine'):
-                        self.engine = pyttsx3.init()
-                        self.engine.setProperty('rate', 180)
-                        self.engine.setProperty('volume', 1.0)
-                        voices = self.engine.getProperty('voices')
-                        self.engine.setProperty('voice', voices[1].id)
-                    
-                    self.engine.say(cleaned_text)
-                    
-                    if block:
-                        self.engine.runAndWait()
-                    else:
-                        import threading
-                        threading.Thread(target=self.engine.runAndWait, daemon=True).start()
-                except Exception as fallback_error:
-                    logger.error(f"Fallback speech also failed: {fallback_error}")
+            logger.error(f"Error processing sentence: {e}")
+            return None
     
     def _play_audio_file(self, file_path, block=True):
         """
@@ -381,4 +430,63 @@ class TextToSpeech:
                                   stderr=subprocess.DEVNULL)
             return True
         except subprocess.CalledProcessError:
-            return False 
+            return False
+    
+    def _find_espeak(self):
+        """Find espeak-ng installation path."""
+        # Check common installation paths
+        possible_paths = [
+            "C:\\Program Files\\eSpeak NG",
+            "C:\\Program Files (x86)\\eSpeak NG",
+            "/usr/bin",
+            "/usr/local/bin",
+            "/opt/espeak-ng"
+        ]
+        
+        # Check PATH first
+        for path_dir in os.environ.get("PATH", "").split(os.pathsep):
+            if os.path.exists(os.path.join(path_dir, "espeak-ng.exe")):
+                return os.path.join(path_dir, "espeak-ng.exe")
+            elif os.path.exists(os.path.join(path_dir, "espeak-ng")):
+                return os.path.join(path_dir, "espeak-ng")
+                
+        # Check common installation paths
+        for path in possible_paths:
+            if os.path.exists(os.path.join(path, "espeak-ng.exe")):
+                return os.path.join(path, "espeak-ng.exe")
+            elif os.path.exists(os.path.join(path, "espeak-ng")):
+                return os.path.join(path, "espeak-ng")
+                
+        logger.warning("espeak-ng not found in common locations")
+        return None
+        
+    def _init_pyttsx3(self):
+        """Initialize pyttsx3 as fallback TTS engine."""
+        try:
+            logger.info("Initializing pyttsx3...")
+            self.engine = pyttsx3.init()
+            self.engine.setProperty('rate', self.rate)
+            self.engine.setProperty('volume', self.volume)
+            self.voices = self.engine.getProperty('voices')
+            self.engine.setProperty('voice', self.voices[self.voice_id].id)
+            logger.info("pyttsx3 initialized successfully")
+        except Exception as e:
+            logger.error(f"Error initializing pyttsx3: {e}")
+            raise
+            
+    def _split_into_sentences(self, text):
+        """Split text into sentences for better processing."""
+        # Simple sentence splitting on common punctuation
+        sentences = []
+        current = []
+        
+        for char in text:
+            current.append(char)
+            if char in '.!?':
+                sentences.append(''.join(current).strip())
+                current = []
+                
+        if current:  # Add any remaining text
+            sentences.append(''.join(current).strip())
+            
+        return [s for s in sentences if s]  # Remove empty sentences 

@@ -123,25 +123,54 @@ The system automatically attempts to use Coqui-AI TTS first and falls back to py
 
 ```
 daisy/
-├── daisy.py             # Main entry script
-├── test_tts.py          # Script for testing TTS functionality
-├── setup.py             # Setup script for installation
-├── requirements.txt     # Dependencies
-├── personality.txt      # Personality definition
-├── README.md            # Documentation
-├── src/                 # Source code
-│   ├── core/            # Core assistant functionality
-│   │   ├── assistant.py     # Main assistant logic
-│   │   └── personality.py   # Personality management
-│   ├── data/            # Data management
-│   │   └── chat_history.py  # Chat history tracking
-│   ├── voice/           # Voice I/O
-│   │   ├── speech_recognition.py  # Speech recognition
-│   │   └── text_to_speech.py      # Text-to-speech
-│   ├── utils/           # Utilities
-│   │   └── config.py    # Configuration settings
-│   └── main.py          # Application entry point
+├── daisy.py                 # Main CLI entry script
+├── daisy_gui.py            # GUI entry script
+├── test_*.py               # Test scripts
+├── test_comprehensive.py   # Comprehensive test suite
+├── setup.py                # Setup script for installation
+├── requirements.txt        # Dependencies
+├── personality.txt         # Personality definition
+├── README.md               # Documentation
+├── src/                    # Source code
+│   ├── core/               # Core assistant functionality
+│   │   ├── assistant.py         # Main assistant logic
+│   │   └── personality.py       # Personality management
+│   ├── data/               # Data management
+│   │   └── chat_history.py      # Chat history tracking
+│   ├── voice/              # Voice I/O
+│   │   ├── speech_recognition.py # Speech recognition
+│   │   └── text_to_speech.py     # Text-to-speech
+│   ├── rag/                # RAG (Retrieval-Augmented Generation)
+│   │   ├── document_loader.py    # Document loading
+│   │   ├── document_processor.py # Document processing
+│   │   ├── embedding_generator.py # Embedding generation
+│   │   ├── vector_store.py       # Vector storage
+│   │   ├── retriever.py          # Document retrieval
+│   │   └── document_tracker.py   # Document tracking
+│   ├── gui/                # GUI components
+│   │   ├── main_window.py        # Main GUI window
+│   │   └── integration.py        # GUI integration layer
+│   ├── utils/              # Utilities
+│   │   ├── config.py             # Configuration settings
+│   │   ├── config_manager.py     # Configuration management
+│   │   ├── connection_manager.py # Ollama connection management
+│   │   ├── resource_manager.py   # Resource cleanup management
+│   │   └── error_handler.py      # Error handling utilities
+│   └── main.py             # Application entry point
 ```
+
+## Testing
+
+Run the comprehensive test suite to verify all components:
+
+```
+python test_comprehensive.py
+```
+
+Individual component tests are also available:
+- `python test_daisy.py` - Basic functionality test
+- `python test_tts.py` - Text-to-speech testing
+- `python test_wake_word.py` - Wake word detection testing
 
 ## Extension and Customization
 

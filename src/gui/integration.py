@@ -12,7 +12,7 @@ from src.voice.speech_recognition import SpeechRecognizer
 from src.voice.text_to_speech import TextToSpeech
 from src.utils.config import (
     TTS_RATE, TTS_VOLUME, TTS_VOICE_ID, TTS_SPEAKER_IDX,
-    WHISPER_MODEL_SIZE, WHISPER_BEAM_SIZE
+    WHISPER_MODEL_SIZE
 )
 
 
@@ -99,8 +99,8 @@ class DaisyGuiIntegration(QObject):
         
         try:
             self.speech_recognizer = SpeechRecognizer(
-                model_size=whisper_model_size or WHISPER_MODEL_SIZE,
-                beam_size=WHISPER_BEAM_SIZE
+                model_name=whisper_model_size or WHISPER_MODEL_SIZE,
+                device="cpu"
             )
             
             # Debug audio devices if needed
