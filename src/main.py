@@ -177,7 +177,7 @@ class DaisyAssistant:
         
         # Provide audio feedback that we're ready
         if self.voice_ai.ollama_available:
-            self.tts.speak("I'm ready to assist you")
+            self.tts.speak("DAISY Online. All systems functional.")
         
         try:
             while self.should_run:
