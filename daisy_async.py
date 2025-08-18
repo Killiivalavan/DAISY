@@ -28,10 +28,11 @@ from faster_whisper import WhisperModel
 from threading import Thread
 import queue
 import concurrent.futures
+from asyncio import QueueEmpty
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,  # Changed from INFO to DEBUG to see VAD state changes
     format='%(asctime)s - [%(levelname)s] %(name)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ class ResponseSegment:
     is_complete: bool = False
 
 class AsyncAudioRecorder:
-    """Async audio recorder with energy-based VAD."""
+    """Async audio recorder using proven legacy VAD logic."""
     
     def __init__(self, sample_rate=16000, channels=1, chunk_duration=0.1):
         self.sample_rate = sample_rate
@@ -68,103 +69,74 @@ class AsyncAudioRecorder:
         self.chunk_duration = chunk_duration
         self.chunk_size = int(sample_rate * chunk_duration)
         
-        # VAD parameters
-        self.energy_threshold = 0.01
-        self.silence_threshold = 0.009 # Increased to ignore very low background noise more effectively
-        self.min_speech_duration = 0.8 
-        self.max_silence_duration = 2.0 # Adjusted for quicker end-of-speech detection
+        # PROVEN LEGACY VAD PARAMETERS (exactly as in working daisy.py)
+        self.energy_threshold = 0.01  # Same as legacy code
+        self.silence_threshold = 0.005  # Same as legacy code
+        self.min_phrase_length = 0.5  # Same as legacy code
+        self.phrase_timeout = 2.0  # Same as legacy code
+        self.max_recording_time = 10.0  # Same as legacy code
         
-        # State for VAD logic
-        self.speech_started = False
-        self.silence_chunks = 0
-        self.speech_chunks = 0
-        self._max_silence_chunks = int(self.max_silence_duration / self.chunk_duration)
-        self._chunk_queue: Optional[asyncio.Queue] = None
-        
+        # State management
         self.is_recording = False
-        self.chunk_counter = 0
+        self._chunk_queue: Optional[asyncio.Queue] = None
+        self._reset_vad_state_event: Optional[asyncio.Event] = None
         
-        self._reset_vad_state_event: Optional[asyncio.Event] = None # Event to signal VAD reset
+        # Recording state
+        self.audio_buffer = []
+        self.speech_started = False
+        self.speech_chunks = 0
+        self.silence_chunks = 0
+        self.max_silence_chunks = int(self.phrase_timeout / self.chunk_duration)
+        self.max_total_chunks = int(self.max_recording_time / self.chunk_duration)
 
     def set_reset_event(self, event: asyncio.Event):
         self._reset_vad_state_event = event
 
     def _audio_input_callback(self, indata, frames, time_info, status):
+        """Audio callback - store chunks for processing."""
         if status:
             logger.warning(f"Audio callback status: {status}")
         
-        # Calculate energy for VAD
-        energy = np.mean(np.abs(indata))
-        chunk_data = indata.copy().flatten()
-        
-        logger.debug(f"Chunk {self.chunk_counter} energy: {energy}")
-
-        # Create audio chunk with metadata
-        chunk = AudioChunk(
-            data=chunk_data,
-            timestamp=time_info.inputBufferAdcTime,
-            chunk_id=self.chunk_counter
-        )
-        self.chunk_counter += 1
-        
-        # VAD logic
-        if energy > self.energy_threshold:
-            if not self.speech_started:
-                logger.info("🎤 Speech detected - starting transcription")
-                self.speech_started = True
-            
-            self.speech_chunks += 1
-            self.silence_chunks = 0
-            
-            # Add to queue for processing
-            try:
-                if self._chunk_queue:
-                    self._chunk_queue.put_nowait(chunk)
-            except asyncio.QueueFull:
-                logger.warning("Audio chunk queue is full, dropping chunk")
-                
-        elif self.speech_started and energy < self.silence_threshold:
-            self.silence_chunks += 1
-            
-            # Still add silence chunks to maintain audio continuity
-            try:
-                if self._chunk_queue:
-                    self._chunk_queue.put_nowait(chunk)
-            except asyncio.QueueFull:
-                pass
-            
-            # Check if speech has ended
-            if self.silence_chunks >= self._max_silence_chunks:
-                min_speech_chunks = int(self.min_speech_duration / self.chunk_duration)
-                if self.speech_chunks >= min_speech_chunks:
-                    logger.info(f"🔇 Speech ended ({self.speech_chunks} chunks, {self.speech_chunks * self.chunk_duration:.2f}s)")
-                    # Signal end of speech
-                    try:
-                        if self._chunk_queue:
-                            self._chunk_queue.put_nowait(None)  # End marker
-                            # After signaling end of speech, reset VAD state and signal pipeline for next interaction
-                            self.speech_started = False
-                            self.silence_chunks = 0
-                            self.speech_chunks = 0
-                            if self._reset_vad_state_event:
-                                self._reset_vad_state_event.set() # Signal pipeline for next interaction
-
-                    except asyncio.QueueFull:
-                        pass
-                
-                # Reset for next speech segment (if not already reset by the event logic above)
-                if not self.speech_started:
-                    self.speech_started = False
-                    self.silence_chunks = 0
-                    self.speech_chunks = 0
+        # Store audio chunk (same as legacy code)
+        self.audio_buffer.append(indata.copy())
 
     async def record_audio_stream(self, chunk_queue: asyncio.Queue) -> None:
         """
-        Continuously capture microphone input and push chunks to queue.
-        Waits for a signal to start actively detecting speech.
+        Async version of the proven legacy recording logic.
+        Records audio in finite sessions like the working daisy.py.
         """
-        logger.info("Starting async audio recording stream")
-        self._chunk_queue = chunk_queue # Store queue for callback
+        logger.info("Starting async audio recording stream (using legacy VAD logic)")
+        self._chunk_queue = chunk_queue
+        
+        try:
+            while self.is_recording:
+                # Wait for the signal to start a new recording session
+                if self._reset_vad_state_event:
+                    await self._reset_vad_state_event.wait()
+                    self._reset_vad_state_event.clear()
+                
+                logger.info("🎧 Starting new recording session - speak now!")
+                
+                # Start a new recording session
+                await self._record_session(chunk_queue)
+                
+                logger.info("🎧 Recording session completed, ready for next interaction")
+                
+        except Exception as e:
+            logger.error(f"Error in audio recording: {e}")
+        finally:
+            logger.info("Audio recording stream stopped")
+
+    async def _record_session(self, chunk_queue: asyncio.Queue) -> None:
+        """
+        Record a single audio session using the exact legacy VAD logic.
+        This is the async version of _record_with_energy_detection.
+        """
+        # Reset for new session
+        self.audio_buffer.clear()
+        self.speech_started = False
+        self.speech_chunks = 0
+        self.silence_chunks = 0
         
         try:
             with sd.InputStream(
@@ -174,21 +146,101 @@ class AsyncAudioRecorder:
                 callback=self._audio_input_callback,
                 blocksize=self.chunk_size
             ):
-                logger.info("Audio stream started - waiting for start signal...")
-                while self.is_recording:
-                    # Wait for the signal to reset VAD state and begin a new listening cycle
-                    if self._reset_vad_state_event:
-                        await self._reset_vad_state_event.wait()
-                        self._reset_vad_state_event.clear() # Clear the event once processed
-
-                    logger.info("Audio stream ready - speak now!")
-                    # No need for explicit VAD reset here, as it's done in callback after EOS
-                    await asyncio.sleep(0.1) # Keep coroutine alive while waiting for speech
+                logger.info("🎤 Listening for speech...")
+                
+                # EXACT LEGACY LOGIC: Process chunks one by one
+                for chunk_idx in range(self.max_total_chunks):
+                    # Wait for chunk (async version of time.sleep)
+                    await asyncio.sleep(self.chunk_duration)
+                    
+                    if len(self.audio_buffer) > chunk_idx:
+                        chunk = self.audio_buffer[chunk_idx]
+                        
+                        # Calculate energy (exact same as legacy)
+                        energy = np.mean(np.abs(chunk))
+                        
+                        # EXACT LEGACY VAD LOGIC
+                        if energy > self.energy_threshold:
+                            # Speech detected
+                            if not self.speech_started:
+                                logger.info("🎤 Speech started")
+                                self.speech_started = True
+                            
+                            # Add to queue for processing
+                            try:
+                                chunk_data = chunk.flatten()
+                                audio_chunk = AudioChunk(
+                                    data=chunk_data,
+                                    timestamp=time.time(),
+                                    chunk_id=chunk_idx
+                                )
+                                chunk_queue.put_nowait(audio_chunk)
+                            except asyncio.QueueFull:
+                                logger.warning("Audio chunk queue is full, dropping chunk")
+                            
+                            self.speech_chunks += 1
+                            self.silence_chunks = 0
+                            
+                        elif self.speech_started and energy < self.silence_threshold:
+                            # Silence during speech
+                            self.silence_chunks += 1
+                            
+                            # Still add silence chunks to maintain audio continuity
+                            try:
+                                chunk_data = chunk.flatten()
+                                audio_chunk = AudioChunk(
+                                    data=chunk_data,
+                                    timestamp=time.time(),
+                                    chunk_id=chunk_idx
+                                )
+                                chunk_queue.put_nowait(audio_chunk)
+                            except asyncio.QueueFull:
+                                pass
+                            
+                            if self.silence_chunks >= self.max_silence_chunks:
+                                logger.info("🔇 Speech ended (silence detected)")
+                                break
+                        
+                        elif self.speech_started:
+                            # Low energy but not silent - still add to recording
+                            try:
+                                chunk_data = chunk.flatten()
+                                audio_chunk = AudioChunk(
+                                    data=chunk_data,
+                                    timestamp=time.time(),
+                                    chunk_id=chunk_idx
+                                )
+                                chunk_queue.put_nowait(audio_chunk)
+                            except asyncio.QueueFull:
+                                pass
+                
+                # Check if we have enough speech (exact legacy logic)
+                if self.speech_started and self.speech_chunks >= int(self.min_phrase_length / self.chunk_duration):
+                    speech_duration = self.speech_chunks * self.chunk_duration
+                    logger.info(f"✅ Recording completed: {self.speech_chunks} chunks, {speech_duration:.2f}s")
+                    
+                    # Signal end of speech (same as legacy end-of-recording)
+                    try:
+                        chunk_queue.put_nowait(None)  # End marker
+                    except asyncio.QueueFull:
+                        pass
+                else:
+                    logger.info("❌ No speech detected or phrase too short")
+                    # Clear any partial chunks
+                    while not chunk_queue.empty():
+                        try:
+                            chunk_queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
                     
         except Exception as e:
-            logger.error(f"Error in audio recording: {e}")
-        finally:
-            logger.info("Audio recording stream stopped")
+            logger.error(f"Error during recording session: {e}")
+            # Clear any partial chunks on error
+            while not chunk_queue.empty():
+                try:
+                    chunk_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
 
 class AsyncWhisperTranscriber:
     """Async transcriber using Faster-Whisper."""
@@ -676,6 +728,23 @@ class AsyncVoicePipeline:
         finally:
             await self.stop_pipeline()
 
+    async def stop_pipeline(self):
+        """Stop the pipeline and clean up resources."""
+        logger.info("🛑 Stopping async voice pipeline")
+        self.running = False
+        self.recorder.is_recording = False
+        
+        # Cancel all running tasks
+        for task in self.tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        
+        logger.info("✅ Pipeline stopped successfully")
+
 async def main():
     """Main entry point for the async voice pipeline."""
     print("=" * 60)
@@ -696,6 +765,13 @@ async def main():
     print("Press Ctrl+C to stop")
     print("=" * 60)
     
+    # ADD TEST MODE OPTION
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--test-vad":
+        print("\n🧪 TEST MODE: Testing VAD system only")
+        await test_vad_only()
+        return
+    
     pipeline = AsyncVoicePipeline()
     
     try:
@@ -705,6 +781,59 @@ async def main():
     except Exception as e:
         print(f"❌ Error: {e}")
         logger.error(f"Main error: {e}")
+
+async def test_vad_only():
+    """Test just the VAD system to debug issues."""
+    print("🧪 Starting VAD test mode...")
+    
+    # Create recorder
+    recorder = AsyncAudioRecorder()
+    
+    # Create a simple queue for testing
+    test_queue = asyncio.Queue()
+    
+    # Set up the recorder
+    recorder._chunk_queue = test_queue
+    recorder.is_recording = True
+    
+    print("🧪 VAD test mode started. Speak into your microphone...")
+    print("🧪 Press Ctrl+C to stop the test")
+    print("🧪 Watch the logs for energy levels and VAD state changes")
+    
+    try:
+        # Start recording in a separate task
+        recording_task = asyncio.create_task(
+            recorder.record_audio_stream(test_queue)
+        )
+        
+        # Simple test loop
+        chunk_count = 0
+        while True:
+            try:
+                # Wait for audio chunks
+                chunk = await asyncio.wait_for(test_queue.get(), timeout=1.0)
+                if chunk is None:
+                    print("🧪 End of speech detected!")
+                    break
+                chunk_count += 1
+                if chunk_count % 10 == 0:
+                    print(f"🧪 Processed {chunk_count} audio chunks")
+                    
+            except asyncio.TimeoutError:
+                # Print status every 5 seconds
+                print(f"🧪 VAD Status: {recorder.vad_state}, Chunks: {recorder.chunk_counter}, Speech: {recorder.speech_chunks}")
+                continue
+                
+    except KeyboardInterrupt:
+        print("\n🧪 VAD test stopped by user")
+    finally:
+        recorder.is_recording = False
+        recording_task.cancel()
+        try:
+            await recording_task
+        except asyncio.CancelledError:
+            pass
+        print("🧪 VAD test completed")
 
 if __name__ == "__main__":
     # Run the async pipeline
