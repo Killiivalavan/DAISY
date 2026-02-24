@@ -1,6 +1,6 @@
 # D.A.I.S.Y. Voice Assistant
 
-**D**ramatically **A**dvanced **I**ntelligent **SY**stem
+**D**omestic **A**rtificial **I**ntelligence **SY**stem
 
 *An advanced, privacy-focused voice assistant inspired by J.A.R.V.I.S., powered by local AI models*
 
