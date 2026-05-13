@@ -1,0 +1,40 @@
+audio:
+  sample_rate: 16000
+  channels: 1
+  chunk_size: 512
+  input_device: null
+  output_device: null
+
+vad:
+  threshold: 0.5
+  speech_start_frames: 3
+  speech_end_frames: 18
+  sample_rate: 16000
+  frame_size: 512
+
+stt:
+  model: small.en
+  device: cpu
+  compute_type: int8
+
+llm:
+  primary: groq
+  groq:
+    api_key_env: GROQ_API_KEY
+    model: llama-3.3-70b-versatile
+    temperature: 0.7
+    max_tokens: 1024
+    base_url: https://api.groq.com/openai/v1
+  system_prompt_path: SOUL.md
+
+tts:
+  primary: kokoro
+  kokoro:
+    voice: af_heart
+    sample_rate: 24000
+
+pipeline:
+  listening_timeout: 10
+  processing_timeout: 30
+
+mode: always_on

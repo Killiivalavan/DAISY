@@ -1,0 +1,33 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Model files (downloaded at runtime)
+*.tflite
+*.onnx
+models/
+
+# Logs
+*.log
+
+# Local data
+daisy_local.db
+
+# Config overrides
+config.local.yaml
