@@ -750,16 +750,16 @@ Build strictly in order. Do not skip phases. Do not add Phase N+1 features to Ph
 **Goal**: End-to-end voice conversation working. No tools, no memory, no wake word.
 
 Deliverables:
-- [ ] Project repo initialized, config.yaml defined, SOUL.md written
-- [ ] `audio/input_stream.py` — microphone audio stream
-- [ ] `vad/silero_vad.py` — VAD detecting speech start/end
-- [ ] `stt/faster_whisper_stt.py` — transcript from audio
-- [ ] `llm/groq_client.py` — streaming LLM response
-- [ ] `llm/sentence_splitter.py` — sentence chunking from token stream
-- [ ] `tts/kokoro_tts.py` — speech synthesis
-- [ ] `audio/output_stream.py` — audio playback
-- [ ] `core/pipeline.py` — wires all of above into one conversation turn
-- [ ] `main.py` — simple loop: VAD → STT → LLM → TTS → repeat
+- [x] Project repo initialized, config.yaml defined, SOUL.md written
+- [x] `audio/input_stream.py` — microphone audio stream
+- [x] `vad/silero_vad.py` — VAD detecting speech start/end
+- [x] `stt/faster_whisper_stt.py` — transcript from audio
+- [x] `llm/groq_client.py` — streaming LLM response
+- [x] `llm/sentence_splitter.py` — sentence chunking from token stream
+- [x] `tts/kokoro_tts.py` — speech synthesis
+- [x] `audio/output_stream.py` — audio playback
+- [x] `core/pipeline.py` — wires all of above into one conversation turn
+- [x] `main.py` — simple loop: VAD → STT → LLM → TTS → repeat
 
 **Success criterion**: You can speak to D.A.I.S.Y. and she responds naturally within 2 seconds. The streaming pipeline is working. No crashes on 10 consecutive turns.
 
