@@ -6,11 +6,11 @@ audio:
   output_device: null
 
 vad:
-  threshold: 0.5
-  speech_start_frames: 3
-  speech_end_frames: 18
-  sample_rate: 16000
-  frame_size: 512
+  speech_start_frames: 4
+  speech_end_frames: 25
+  max_recording_seconds: 15
+  startup_ignore_ms: 500
+  silero_threshold: 0.5
 
 stt:
   model: small.en

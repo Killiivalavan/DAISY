@@ -13,11 +13,11 @@ class AudioConfig(BaseModel):
 
 
 class VADConfig(BaseModel):
-    threshold: float = 0.5
-    speech_start_frames: int = 3
-    speech_end_frames: int = 18
-    sample_rate: int = 16000
-    frame_size: int = 512
+    speech_start_frames: int = 8
+    speech_end_frames: int = 20
+    max_recording_seconds: int = 15
+    startup_ignore_ms: int = 500
+    silero_threshold: float = 0.5
 
 
 class STTConfig(BaseModel):

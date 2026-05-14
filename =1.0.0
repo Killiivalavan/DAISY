@@ -1,0 +1,122 @@
+Collecting RealtimeSTT>=1.0.0 (from RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading realtimestt-1.0.0-py3-none-any.whl.metadata (10 kB)
+Collecting python-dotenv
+  Using cached python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
+Collecting PyAudio==0.2.14 (from RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading PyAudio-0.2.14.tar.gz (47 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting webrtcvad-wheels==2.0.14 (from RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading webrtcvad_wheels-2.0.14-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.5 kB)
+Collecting halo==0.0.31 (from RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading halo-0.0.31.tar.gz (11 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: torch in ./.venv/lib/python3.12/site-packages (from RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (2.12.0)
+Requirement already satisfied: torchaudio in ./.venv/lib/python3.12/site-packages (from RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (2.11.0)
+Collecting scipy==1.17.1 (from RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+Collecting websockets==16.0 (from RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading websockets-16.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.8 kB)
+Collecting websocket-client==1.9.0 (from RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Using cached websocket_client-1.9.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting soundfile==0.13.1 (from RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading soundfile-0.13.1-py2.py3-none-manylinux_2_28_x86_64.whl.metadata (16 kB)
+Collecting log_symbols>=0.0.14 (from halo==0.0.31->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading log_symbols-0.0.14-py3-none-any.whl.metadata (523 bytes)
+Collecting spinners>=0.0.24 (from halo==0.0.31->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading spinners-0.0.24-py3-none-any.whl.metadata (576 bytes)
+Requirement already satisfied: termcolor>=1.1.0 in ./.venv/lib/python3.12/site-packages (from halo==0.0.31->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (3.3.0)
+Collecting colorama>=0.3.9 (from halo==0.0.31->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0)
+  Downloading colorama-0.4.6-py2.py3-none-any.whl.metadata (17 kB)
+Requirement already satisfied: six>=1.12.0 in ./.venv/lib/python3.12/site-packages (from halo==0.0.31->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (1.17.0)
+Requirement already satisfied: numpy<2.7,>=1.26.4 in ./.venv/lib/python3.12/site-packages (from scipy==1.17.1->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (2.4.4)
+Requirement already satisfied: cffi>=1.0 in ./.venv/lib/python3.12/site-packages (from soundfile==0.13.1->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (2.0.0)
+Requirement already satisfied: pycparser in ./.venv/lib/python3.12/site-packages (from cffi>=1.0->soundfile==0.13.1->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (3.0)
+Requirement already satisfied: faster-whisper==1.2.1 in ./.venv/lib/python3.12/site-packages (from RealtimeSTT[faster-whisper]>=1.0.0) (1.2.1)
+Requirement already satisfied: ctranslate2<5,>=4.0 in ./.venv/lib/python3.12/site-packages (from faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (4.7.1)
+Requirement already satisfied: huggingface-hub>=0.21 in ./.venv/lib/python3.12/site-packages (from faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (1.14.0)
+Requirement already satisfied: tokenizers<1,>=0.13 in ./.venv/lib/python3.12/site-packages (from faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (0.22.2)
+Requirement already satisfied: onnxruntime<2,>=1.14 in ./.venv/lib/python3.12/site-packages (from faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (1.26.0)
+Requirement already satisfied: av>=11 in ./.venv/lib/python3.12/site-packages (from faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (17.0.1)
+Requirement already satisfied: tqdm in ./.venv/lib/python3.12/site-packages (from faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (4.67.3)
+Requirement already satisfied: setuptools in ./.venv/lib/python3.12/site-packages (from ctranslate2<5,>=4.0->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (81.0.0)
+Requirement already satisfied: pyyaml<7,>=5.3 in ./.venv/lib/python3.12/site-packages (from ctranslate2<5,>=4.0->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (6.0.3)
+Requirement already satisfied: flatbuffers in ./.venv/lib/python3.12/site-packages (from onnxruntime<2,>=1.14->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (25.12.19)
+Requirement already satisfied: packaging in ./.venv/lib/python3.12/site-packages (from onnxruntime<2,>=1.14->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (26.2)
+Requirement already satisfied: protobuf in ./.venv/lib/python3.12/site-packages (from onnxruntime<2,>=1.14->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (7.34.1)
+Requirement already satisfied: filelock>=3.10.0 in ./.venv/lib/python3.12/site-packages (from huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (3.29.0)
+Requirement already satisfied: fsspec>=2023.5.0 in ./.venv/lib/python3.12/site-packages (from huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (2026.4.0)
+Requirement already satisfied: hf-xet<2.0.0,>=1.4.3 in ./.venv/lib/python3.12/site-packages (from huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (1.5.0)
+Requirement already satisfied: httpx<1,>=0.23.0 in ./.venv/lib/python3.12/site-packages (from huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (0.28.1)
+Requirement already satisfied: typer>=0.20.0 in ./.venv/lib/python3.12/site-packages (from huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (0.25.1)
+Requirement already satisfied: typing-extensions>=4.1.0 in ./.venv/lib/python3.12/site-packages (from huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (4.15.0)
+Requirement already satisfied: anyio in ./.venv/lib/python3.12/site-packages (from httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (4.13.0)
+Requirement already satisfied: certifi in ./.venv/lib/python3.12/site-packages (from httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (2026.4.22)
+Requirement already satisfied: httpcore==1.* in ./.venv/lib/python3.12/site-packages (from httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (1.0.9)
+Requirement already satisfied: idna in ./.venv/lib/python3.12/site-packages (from httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (3.15)
+Requirement already satisfied: h11>=0.16 in ./.venv/lib/python3.12/site-packages (from httpcore==1.*->httpx<1,>=0.23.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (0.16.0)
+Requirement already satisfied: click>=8.2.1 in ./.venv/lib/python3.12/site-packages (from typer>=0.20.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (8.3.3)
+Requirement already satisfied: shellingham>=1.3.0 in ./.venv/lib/python3.12/site-packages (from typer>=0.20.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (1.5.4)
+Requirement already satisfied: rich>=13.8.0 in ./.venv/lib/python3.12/site-packages (from typer>=0.20.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (15.0.0)
+Requirement already satisfied: annotated-doc>=0.0.2 in ./.venv/lib/python3.12/site-packages (from typer>=0.20.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (0.0.4)
+Requirement already satisfied: markdown-it-py>=2.2.0 in ./.venv/lib/python3.12/site-packages (from rich>=13.8.0->typer>=0.20.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (4.2.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in ./.venv/lib/python3.12/site-packages (from rich>=13.8.0->typer>=0.20.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (2.20.0)
+Requirement already satisfied: mdurl~=0.1 in ./.venv/lib/python3.12/site-packages (from markdown-it-py>=2.2.0->rich>=13.8.0->typer>=0.20.0->huggingface-hub>=0.21->faster-whisper==1.2.1->RealtimeSTT[faster-whisper]>=1.0.0) (0.1.2)
+Requirement already satisfied: sympy>=1.13.3 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (3.6.1)
+Requirement already satisfied: jinja2 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (3.1.6)
+Requirement already satisfied: cuda-toolkit==13.0.2 in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (13.0.2)
+Requirement already satisfied: nvidia-cublas<=13.1.1.3,>=13.1.0.3 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (13.1.1.3)
+Requirement already satisfied: cuda-bindings<14,>=13.0.3 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (13.2.0)
+Requirement already satisfied: nvidia-cudnn-cu13==9.20.0.48 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (9.20.0.48)
+Requirement already satisfied: nvidia-cusparselt-cu13==0.8.1 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (0.8.1)
+Requirement already satisfied: nvidia-nccl-cu13==2.29.7 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (2.29.7)
+Requirement already satisfied: nvidia-nvshmem-cu13==3.4.5 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (3.4.5)
+Requirement already satisfied: triton==3.7.0 in ./.venv/lib/python3.12/site-packages (from torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (3.7.0)
+Requirement already satisfied: nvidia-cuda-runtime==13.0.96.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (13.0.96)
+Requirement already satisfied: nvidia-cufft==12.0.0.61.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (12.0.0.61)
+Requirement already satisfied: nvidia-cufile==1.15.1.6.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (1.15.1.6)
+Requirement already satisfied: nvidia-cuda-cupti==13.0.85.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (13.0.85)
+Requirement already satisfied: nvidia-curand==10.4.0.35.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (10.4.0.35)
+Requirement already satisfied: nvidia-cusolver==12.0.4.66.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (12.0.4.66)
+Requirement already satisfied: nvidia-cusparse==12.6.3.3.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (12.6.3.3)
+Requirement already satisfied: nvidia-nvjitlink==13.0.88.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (13.0.88)
+Requirement already satisfied: nvidia-cuda-nvrtc==13.0.88.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (13.0.88)
+Requirement already satisfied: nvidia-nvtx==13.0.85.* in ./.venv/lib/python3.12/site-packages (from cuda-toolkit[cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (13.0.85)
+Requirement already satisfied: cuda-pathfinder~=1.1 in ./.venv/lib/python3.12/site-packages (from cuda-bindings<14,>=13.0.3->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (1.5.4)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in ./.venv/lib/python3.12/site-packages (from sympy>=1.13.3->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (1.3.0)
+Requirement already satisfied: MarkupSafe>=2.0 in ./.venv/lib/python3.12/site-packages (from jinja2->torch->RealtimeSTT>=1.0.0->RealtimeSTT[faster-whisper]>=1.0.0) (3.0.3)
+Downloading realtimestt-1.0.0-py3-none-any.whl (142 kB)
+Downloading scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.2/35.2 MB 10.9 MB/s  0:00:03
+Downloading soundfile-0.13.1-py2.py3-none-manylinux_2_28_x86_64.whl (1.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 5.5 MB/s  0:00:00
+Downloading webrtcvad_wheels-2.0.14-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (82 kB)
+Using cached websocket_client-1.9.0-py3-none-any.whl (82 kB)
+Downloading websockets-16.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (184 kB)
+Using cached python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+Downloading colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+Downloading log_symbols-0.0.14-py3-none-any.whl (3.1 kB)
+Downloading spinners-0.0.24-py3-none-any.whl (5.5 kB)
+Building wheels for collected packages: halo, PyAudio
+  Building wheel for halo (pyproject.toml): started
+  Building wheel for halo (pyproject.toml): finished with status 'done'
+  Created wheel for halo: filename=halo-0.0.31-py3-none-any.whl size=11313 sha256=15ce754b12628387397cc4eaf5042ae8c41cc54a6bfc64593b6fb3a70be916b8
+  Stored in directory: /home/bashman/.cache/pip/wheels/0b/b2/f8/376708b4c66e68a1a7d40aaba26521645e7f5ad3b9ef756031
+  Building wheel for PyAudio (pyproject.toml): started
+  Building wheel for PyAudio (pyproject.toml): finished with status 'done'
+  Created wheel for PyAudio: filename=pyaudio-0.2.14-cp312-cp312-linux_x86_64.whl size=70585 sha256=8f0cd2e3f1c22165c6db4e0cd2fbfe8d510d8487aa4be0ad5750c3c53ec75898
+  Stored in directory: /home/bashman/.cache/pip/wheels/68/c7/33/c6a6b210cb5819ec5c219928c794a447742a7d86d21c0b92e6
+Successfully built halo PyAudio
+Installing collected packages: webrtcvad-wheels, spinners, PyAudio, websockets, websocket-client, scipy, python-dotenv, colorama, soundfile, log_symbols, halo, RealtimeSTT
+
+Successfully installed PyAudio-0.2.14 RealtimeSTT-1.0.0 colorama-0.4.6 halo-0.0.31 log_symbols-0.0.14 python-dotenv-1.2.2 scipy-1.17.1 soundfile-0.13.1 spinners-0.0.24 webrtcvad-wheels-2.0.14 websocket-client-1.9.0 websockets-16.0

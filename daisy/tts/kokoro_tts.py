@@ -4,9 +4,15 @@ from kokoro import KPipeline
 
 class KokoroTTS:
     def __init__(self, config):
-        self.pipeline = KPipeline(lang_code="a")
+        self._pipeline = None
         self.voice = config.tts.kokoro.voice
         self.sample_rate = config.tts.kokoro.sample_rate
+
+    @property
+    def pipeline(self):
+        if self._pipeline is None:
+            self._pipeline = KPipeline(lang_code="a")
+        return self._pipeline
 
     def synthesize(self, text: str) -> np.ndarray:
         audio_chunks = []

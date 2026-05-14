@@ -13,9 +13,12 @@ class AudioInputStream:
         self._stream = None
 
     def _callback(self, indata, frames, time, status):
-        self._queue.put_nowait(indata.copy())
+        self._loop.call_soon_threadsafe(self._queue.put_nowait, indata.copy())
 
     async def start(self):
+        while not self._queue.empty():
+            self._queue.get_nowait()
+        self._loop = asyncio.get_running_loop()
         self._stream = sd.InputStream(
             samplerate=self.sample_rate,
             channels=self.channels,

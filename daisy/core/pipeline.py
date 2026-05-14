@@ -23,12 +23,21 @@ class Pipeline:
         self.audio_out.start()
 
     async def stop(self):
-        await self.audio_in.stop()
         self.audio_out.stop()
+        await self.audio_in.stop()
 
     async def run_turn(self):
+        import time
+        t_start = time.time()
+
+        t0 = time.time()
         audio_buffer = await self.vad.listen(self.audio_in)
+        t1 = time.time()
+        print(f"[timing] VAD listen: {t1-t0:.2f}s", file=__import__("sys").stderr)
+
         text = await self.stt.transcribe(audio_buffer)
+        t2 = time.time()
+        print(f"[timing] STT: {t2-t1:.2f}s | text: \"{text}\"", file=__import__("sys").stderr)
         if not text:
             return
 
@@ -59,6 +68,14 @@ class Pipeline:
         llm_task = asyncio.create_task(llm_worker())
 
         await llm_task
+        t3 = time.time()
+        print(f"[timing] LLM stream done: {t3-t2:.2f}s", file=__import__("sys").stderr)
+
         await tts_task
+        t4 = time.time()
+        print(f"[timing] TTS synth done: {t4-t3:.2f}s", file=__import__("sys").stderr)
 
         await self.audio_out.wait_until_done()
+        t5 = time.time()
+        print(f"[timing] Playback done: {t5-t4:.2f}s", file=__import__("sys").stderr)
+        print(f"[timing] Total turn: {t5-t_start:.2f}s", file=__import__("sys").stderr)

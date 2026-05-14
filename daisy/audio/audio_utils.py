@@ -6,7 +6,7 @@ def int16_to_float32(audio: np.ndarray) -> np.ndarray:
 
 
 def float32_to_int16(audio: np.ndarray) -> np.ndarray:
-    return (audio * 32768.0).astype(np.int16)
+    return np.clip(audio * 32768.0, -32768, 32767).astype(np.int16)
 
 
 def resample(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
