@@ -50,10 +50,13 @@ class TTSConfig(BaseModel):
     kokoro: KokoroConfig = KokoroConfig()
 
 
+class WakeWordConfig(BaseModel):
+    model: str = "models/daisy.onnx"
+    threshold: float = 0.5
+
 class PipelineConfig(BaseModel):
     listening_timeout: int = 10
     processing_timeout: int = 30
-
 
 class Config(BaseModel):
     audio: AudioConfig = AudioConfig()
@@ -62,7 +65,8 @@ class Config(BaseModel):
     llm: LLMConfig = LLMConfig()
     tts: TTSConfig = TTSConfig()
     pipeline: PipelineConfig = PipelineConfig()
-    mode: str = "always_on"
+    wake_word: WakeWordConfig = WakeWordConfig()
+    mode: str = "wake_word"
 
 
 def load_config(path: str = "config.yaml") -> Config:

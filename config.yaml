@@ -37,4 +37,8 @@ pipeline:
   listening_timeout: 10
   processing_timeout: 30
 
-mode: always_on
+mode: wake_word
+
+wake_word:
+  model: models/daisy.tflite
+  threshold: 0.4

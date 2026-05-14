@@ -1,21 +1,59 @@
 import asyncio
 import signal
 import sys
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from daisy.utils.config_loader import load_config
-from daisy.core.pipeline import Pipeline
+from daisy.core.event_bus import EventBus
+from daisy.core.state_machine import DaisyStateMachine
+from daisy.wake_word.detector import WakeWordDetector
+from daisy.audio.input_stream import AudioInputStream
+from daisy.audio.output_stream import AudioOutputStream
+from daisy.vad.silero_vad import SileroVAD
+from daisy.stt.faster_whisper_stt import FasterWhisperSTT
+from daisy.llm.groq_client import GroqClient
+from daisy.tts.kokoro_tts import KokoroTTS
 
+# Configure basic logging to see state transitions clearly
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stderr)
 
 async def main():
     load_dotenv()
     config = load_config("config.yaml")
-    pipeline = Pipeline(config)
-    await pipeline.start()
+    
+    # --- Core Infrastructure ---
+    event_bus = EventBus()
+    
+    # --- Pipeline Components ---
+    audio_in = AudioInputStream(config)
+    audio_out = AudioOutputStream(config)
+    vad = SileroVAD(config)
+    stt = FasterWhisperSTT(config)
+    llm = GroqClient(config)
+    tts = KokoroTTS(config)
+    wake_word_detector = WakeWordDetector(config, event_bus)
 
+    # --- Initialize State Machine ---
+    state_machine = DaisyStateMachine(
+        config=config,
+        event_bus=event_bus,
+        audio_in=audio_in,
+        audio_out=audio_out,
+        vad=vad,
+        stt=stt,
+        llm=llm,
+        tts=tts,
+        wake_word_detector=wake_word_detector
+    )
+
+    await audio_in.start()
+    audio_out.start()
+
+    # --- Graceful Shutdown Setup ---
     shutdown_event = asyncio.Event()
 
     def signal_handler():
@@ -26,27 +64,19 @@ async def main():
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, signal_handler)
 
-    print("D.A.I.S.Y. v2 ready. Listening...")
+    print("D.A.I.S.Y. v2 ready.", file=sys.stderr)
+    
+    # Boot the state machine (transitions init -> idle, starting wake word listening)
+    await state_machine.boot()
+    
     try:
-        while not shutdown_event.is_set():
-            print("  [main] Listening...", file=sys.stderr)
-            turn_task = asyncio.create_task(pipeline.run_turn())
-            done, pending = await asyncio.wait(
-                [turn_task, asyncio.create_task(shutdown_event.wait())],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-            if turn_task in done:
-                exc = turn_task.exception()
-                if exc:
-                    print(f"  [main] Error: {exc}", file=sys.stderr)
+        # The main task now simply waits for the shutdown signal.
+        # Everything else is driven by the background tasks and event bus.
+        await shutdown_event.wait()
     finally:
-        await pipeline.stop()
+        wake_word_detector.stop()
+        audio_out.stop()
+        await audio_in.stop()
         print("D.A.I.S.Y. stopped.", file=sys.stderr)
 
 

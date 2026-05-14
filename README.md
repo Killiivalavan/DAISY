@@ -81,6 +81,10 @@ Windows users generally do not need to install PortAudio manually as the `soundd
    - You can adjust the VAD threshold under `vad -> silero_threshold` (lower it if it doesn't pick up your voice, raise it if it triggers on noise).
    - You can change the TTS voice under `tts -> kokoro -> voice`.
 
+## Wake Word Engine
+   Create a folder models/ in the root directory and place your .onnx and .tflite files in it.
+   Generate the wake word engines in "https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb#scrollTo=qgaKWIY6WlJ1"
+
 ## Running D.A.I.S.Y.
 
 Start the assistant by running the main pipeline script:

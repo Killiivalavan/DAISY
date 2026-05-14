@@ -9,6 +9,9 @@ pyyaml>=6.0
 onnxruntime>=1.18.0
 tokenizers==0.22.2
 python-dotenv>=1.0.0
+openwakeword>=0.6.0
+pyaudio>=0.2.14
+python-statemachine>=2.3.0
 
 # Development
 pytest>=9.0

@@ -26,7 +26,7 @@ class SileroVAD:
             prob = self.model(frame_tensor, self.sample_rate).item()
         return prob
 
-    async def listen(self, audio_input) -> np.ndarray:
+    async def listen(self, audio_input, timeout: float = None) -> np.ndarray:
         import time
         import asyncio
 
@@ -45,6 +45,7 @@ class SileroVAD:
         silence_frames = 0
         is_speaking = False
         recording_start = 0.0
+        listen_start = time.time()
         
         window_size = 10
         speech_history = [False] * window_size
@@ -56,12 +57,29 @@ class SileroVAD:
             
             # Silero expects float32 in range [-1, 1]
             if frame.dtype != np.float32:
-                frame = frame.astype(np.float32)
+                # If it's int16, normalize to [-1, 1]
+                if frame.dtype == np.int16:
+                    frame = frame.astype(np.float32) / 32767.0
+                else:
+                    frame = frame.astype(np.float32)
 
             prob = self.get_speech_prob(frame)
             is_speech = prob > self.threshold
 
+            # --- Diagnostic Logging ---
+            rms = np.sqrt(np.mean(frame**2))
+            if not hasattr(self, '_log_counter'): self._log_counter = 0
+            self._log_counter += 1
+            if self._log_counter % 20 == 0:
+                print(f"  [VAD Debug] Vol: {rms:.3f} | Prob: {prob:.3f} | Speaking: {is_speaking}", file=__import__("sys").stderr)
+            # --------------------------
+
             if not is_speaking:
+                # Timeout check: If we haven't started speaking and the timer expires
+                if timeout is not None and (time.time() - listen_start) > timeout:
+                    print("  [VAD] Listening timed out.", file=__import__("sys").stderr)
+                    return None
+
                 ring_buffer.append(frame)
                 if len(ring_buffer) > ring_buffer_size:
                     ring_buffer.pop(0)
@@ -84,7 +102,9 @@ class SileroVAD:
                         # Remove trailing silence frames
                         if silence_frames <= len(buffer):
                             buffer = buffer[:-silence_frames]
+                        print(f"  [VAD Debug] Reached {silence_frames} silence frames, returning audio.", file=__import__("sys").stderr)
                         return np.concatenate(buffer)
 
                 if time.time() - recording_start > self.max_recording_seconds:
+                    print(f"  [VAD Debug] Reached max recording seconds, returning audio.", file=__import__("sys").stderr)
                     return np.concatenate(buffer)
