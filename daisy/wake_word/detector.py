@@ -22,6 +22,10 @@ class WakeWordDetector:
         """
         self.is_listening = True
         
+        # Reset the model's internal feature buffer to prevent phantom triggers
+        # caused by old audio from the previous conversation turn.
+        self.oww_model.reset()
+        
         # Flush the old audio queue so we don't process audio from 
         # while D.A.I.S.Y. was speaking or processing.
         while not audio_stream._queue.empty():
@@ -32,13 +36,9 @@ class WakeWordDetector:
                 
         logger.info("Wake Word Detector listening...")
         
-        # Internal buffer to accumulate chunks until we have enough for openWakeWord
-        # openWakeWord prefers 1280 samples (80ms at 16kHz)
-        audio_buffer = np.array([], dtype=np.int16)
-        
         while self.is_listening:
             try:
-                # Read raw audio chunk (np.ndarray) - likely 512 samples
+                # Read raw audio chunk (np.ndarray)
                 chunk = await audio_stream.read()
                 
                 # Convert to 16-bit PCM if needed
@@ -46,36 +46,30 @@ class WakeWordDetector:
                     chunk = (chunk * 32767).astype(np.int16)
                 elif chunk.dtype != np.int16:
                     chunk = chunk.astype(np.int16)
+                    
+                # Ensure it's a 1D array
+                if len(chunk.shape) > 1:
+                    chunk = chunk.flatten()
+
+                # Predict
+                prediction = self.oww_model.predict(chunk)
                 
-                # Append to our internal buffer
-                audio_buffer = np.append(audio_buffer, chunk.flatten())
+                # --- Diagnostic Logging ---
+                rms = np.sqrt(np.mean(chunk.astype(np.float32)**2))
+                max_score = max(prediction.values()) if prediction else 0
+                
+                if not hasattr(self, '_log_counter'): self._log_counter = 0
+                self._log_counter += 1
+                if self._log_counter % 25 == 0:
+                    logger.info(f"[WW Debug] Vol: {rms:.1f} | Max Score: {max_score:.3f}")
+                # --------------------------
 
-                # If we have at least 1280 samples, process them
-                while len(audio_buffer) >= 1280:
-                    # Take the first 1280 samples
-                    process_chunk = audio_buffer[:1280]
-                    # Keep the remainder
-                    audio_buffer = audio_buffer[1280:]
-
-                    # Predict
-                    prediction = self.oww_model.predict(process_chunk)
-                    
-                    # --- Diagnostic Logging ---
-                    rms = np.sqrt(np.mean(process_chunk.astype(np.float32)**2))
-                    max_score = max(prediction.values()) if prediction else 0
-                    
-                    if not hasattr(self, '_log_counter'): self._log_counter = 0
-                    self._log_counter += 1
-                    if self._log_counter % 20 == 0: # Approx every 1.6s
-                        logger.info(f"[WW Debug] Vol: {rms:.1f} | Max Score: {max_score:.3f}")
-                    # --------------------------
-
-                    for mdl_name, score in prediction.items():
-                        if score >= self.config.threshold:
-                            logger.info(f"Wake word '{mdl_name}' detected! (score: {score:.3f})")
-                            self.is_listening = False # Stop self
-                            await self.event_bus.publish("WAKE")
-                            return # Exit loop completely
+                for mdl_name, score in prediction.items():
+                    if score >= self.config.threshold:
+                        logger.info(f"Wake word '{mdl_name}' detected! (score: {score:.3f})")
+                        self.is_listening = False # Stop self
+                        await self.event_bus.publish("WAKE")
+                        return # Exit loop completely
                             
             except asyncio.CancelledError:
                 break
