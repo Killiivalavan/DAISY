@@ -130,7 +130,7 @@ def main():
         config = load_config(str(config_path))
         check(True, f"config.yaml loaded ({config_path})")
         print(f"      Mode: {config.mode}")
-        print(f"      VAD: WebRTC mode {config.vad.webrtc_mode}")
+        print(f"      VAD threshold: {config.vad.silero_threshold}")
         print(f"      STT model: {config.stt.model}")
         print(f"      TTS voice: {config.tts.kokoro.voice}")
     except Exception as e:

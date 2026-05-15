@@ -41,4 +41,4 @@ mode: wake_word
 
 wake_word:
   model: models/daisy.tflite
-  threshold: 0.4
+  threshold: 0.2

@@ -8,15 +8,14 @@ def test_missing_file_returns_defaults(tmp_path):
     config = load_config(str(path))
     assert isinstance(config, Config)
     assert config.audio.sample_rate == 16000
-    assert config.vad.webrtc_mode == 2
     assert config.stt.model == "small.en"
-    assert config.mode == "always_on"
+    assert config.mode == "wake_word"
 
 
 def test_load_with_overrides(tmp_path):
     data = {
         "audio": {"sample_rate": 22050},
-        "vad": {"webrtc_mode": 2, "speech_start_frames": 8},
+        "vad": {"silero_threshold": 0.7, "speech_start_frames": 8},
         "stt": {"model": "tiny.en"},
         "mode": "wake_word",
     }
@@ -26,7 +25,7 @@ def test_load_with_overrides(tmp_path):
 
     config = load_config(str(path))
     assert config.audio.sample_rate == 22050
-    assert config.vad.webrtc_mode == 2
+    assert config.vad.silero_threshold == 0.7
     assert config.vad.speech_start_frames == 8
     assert config.stt.model == "tiny.en"
     assert config.mode == "wake_word"

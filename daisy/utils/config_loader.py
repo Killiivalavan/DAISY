@@ -24,6 +24,7 @@ class STTConfig(BaseModel):
     model: str = "small.en"
     device: str = "cpu"
     compute_type: str = "int8"
+    language: str = "en"
 
 
 class GroqConfig(BaseModel):
@@ -43,6 +44,8 @@ class LLMConfig(BaseModel):
 class KokoroConfig(BaseModel):
     voice: str = "af_heart"
     sample_rate: int = 24000
+    speed: float = 1.0
+    lang_code: str = "a"
 
 
 class TTSConfig(BaseModel):

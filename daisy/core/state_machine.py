@@ -40,7 +40,13 @@ class DaisyStateMachine(StateMachine):
         # Must call super last
         super().__init__()
 
-    async def on_wake_event(self):
+    async def shutdown(self):
+        for name in ("_speaking_task", "_processing_task", "_listening_task", "_llm_task"):
+            task = getattr(self, name, None)
+            if task is not None and not task.done():
+                task.cancel()
+
+    async def on_wake_event(self, data=None):
         """Triggered by the event bus when wake word is detected."""
         if not self.listening.is_active:
             # We run the transition in a separate task to avoid deadlocks 
@@ -106,7 +112,7 @@ class DaisyStateMachine(StateMachine):
     async def _do_listen(self):
         try:
             # We pass a timeout to the VAD so it doesn't hang forever
-            audio_buffer = await self.vad.listen(self.audio_in, timeout=7.0)
+            audio_buffer = await self.vad.listen(self.audio_in, timeout=self.config.pipeline.listening_timeout)
             
             if audio_buffer is not None and len(audio_buffer) > 0:
                 self.current_audio_buffer = audio_buffer
@@ -182,7 +188,15 @@ class DaisyStateMachine(StateMachine):
     async def on_exit_speaking(self):
         if hasattr(self, '_speaking_task') and not self._speaking_task.done():
             self._speaking_task.cancel()
+        if hasattr(self, '_llm_task') and not self._llm_task.done():
+            self._llm_task.cancel()
         self.audio_out.clear()
+        if self.sentence_queue is not None:
+            while not self.sentence_queue.empty():
+                try:
+                    self.sentence_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
 
     async def _do_speak(self):
         try:
@@ -205,6 +219,7 @@ class DaisyStateMachine(StateMachine):
             asyncio.create_task(self._safe_turn_complete())
         except asyncio.CancelledError:
             logger.info("[State] Speaking interrupted.")
+            tts_task.cancel()
         except Exception as e:
             logger.error(f"[State] Error in SPEAKING: {e}")
             asyncio.create_task(self._safe_turn_complete())

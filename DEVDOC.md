@@ -769,13 +769,13 @@ Deliverables:
 **Goal**: Proper activation flow, clean state management.
 
 Deliverables:
-- [ ] `wake_word/detector.py` — OpenWakeWord running continuously
-- [ ] Custom wake word trained ("DAISY")
-- [ ] `core/state_machine.py` — IDLE/LISTENING/PROCESSING/SPEAKING states
-- [ ] `core/event_bus.py` — WAKE event, state transition events
-- [ ] Timeout handling (LISTENING → IDLE after silence)
+- [x] `wake_word/detector.py` — OpenWakeWord running continuously
+- [x] Custom wake word trained ("DAISY")
+- [x] `core/state_machine.py` — IDLE/LISTENING/PROCESSING/SPEAKING states
+- [x] `core/event_bus.py` — WAKE event, state transition events
+- [x] Timeout handling (LISTENING → IDLE after silence)
 - [ ] Audio acknowledgment cues at state transitions
-- [ ] Refactor `main.py` to be event-driven rather than loop-based
+- [x] Refactor `main.py` to be event-driven rather than loop-based
 
 **Success criterion**: D.A.I.S.Y. only activates when she hears "DAISY". Returns to IDLE correctly. Audio cues feel natural.
 

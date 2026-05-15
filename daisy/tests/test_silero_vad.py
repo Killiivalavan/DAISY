@@ -3,13 +3,23 @@ from daisy.vad.silero_vad import SileroVAD
 
 
 class FakeConfig:
+    class AudioConfig:
+        sample_rate = 16000
+        channels = 1
+        chunk_size = 512
+        input_device = None
+        output_device = None
+
     class VadConfig:
         sample_rate = 16000
-        frame_size = 512
-        threshold = 0.5
+        chunk_size = 512
+        silero_threshold = 0.5
         speech_start_frames = 3
         speech_end_frames = 18
+        max_recording_seconds = 15
+        startup_ignore_ms = 500
 
+    audio = AudioConfig()
     vad = VadConfig()
 
 

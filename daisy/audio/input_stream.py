@@ -34,5 +34,12 @@ class AudioInputStream:
             self._stream.close()
             self._stream = None
 
+    def flush(self):
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
     async def read(self) -> np.ndarray:
         return await self._queue.get()

@@ -35,13 +35,7 @@ class EventBus:
         # Create tasks for all subscribers and run them in parallel
         tasks = []
         for callback in self._subscribers[event_type]:
-            # Provide data if the callback expects it, otherwise call without
-            import inspect
-            sig = inspect.signature(callback)
-            if len(sig.parameters) > 0:
-                tasks.append(asyncio.create_task(callback(data)))
-            else:
-                tasks.append(asyncio.create_task(callback()))
+            tasks.append(asyncio.create_task(callback(data)))
 
         if tasks:
             # We use return_exceptions=True so one failing subscriber doesn't crash others

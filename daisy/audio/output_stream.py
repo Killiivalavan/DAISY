@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import threading
 import sounddevice as sd
 import numpy as np
@@ -15,6 +16,8 @@ class AudioOutputStream:
         self._stream = None
 
     def _callback(self, outdata, frames, time, status):
+        if status:
+            logging.warning(f"Audio output underflow/error: {status}")
         with self._lock:
             total = 0
             while total < frames and self._buffer:
@@ -31,7 +34,7 @@ class AudioOutputStream:
             if total < frames:
                 outdata[total:frames] = 0
 
-    def start(self):
+    async def start(self):
         self._stream = sd.OutputStream(
             samplerate=self.sample_rate,
             channels=self.channels,

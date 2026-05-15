@@ -28,11 +28,7 @@ class WakeWordDetector:
         
         # Flush the old audio queue so we don't process audio from 
         # while D.A.I.S.Y. was speaking or processing.
-        while not audio_stream._queue.empty():
-            try:
-                audio_stream._queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
+        audio_stream.flush()
                 
         logger.info("Wake Word Detector listening...")
         
@@ -43,7 +39,7 @@ class WakeWordDetector:
                 
                 # Convert to 16-bit PCM if needed
                 if chunk.dtype == np.float32:
-                    chunk = (chunk * 32767).astype(np.int16)
+                    chunk = (chunk * 32768).astype(np.int16)
                 elif chunk.dtype != np.int16:
                     chunk = chunk.astype(np.int16)
                     

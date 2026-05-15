@@ -51,7 +51,16 @@ async def main():
     )
 
     await audio_in.start()
-    audio_out.start()
+    await audio_out.start()
+
+    # Warm up all ML models concurrently so first inference doesn't pay cold-start
+    logging.getLogger(__name__).info("Warming up models...")
+    await asyncio.gather(
+        vad.warmup(),
+        stt.warmup(),
+        tts.warmup(),
+    )
+    logging.getLogger(__name__).info("All models loaded.")
 
     # --- Graceful Shutdown Setup ---
     shutdown_event = asyncio.Event()
@@ -74,6 +83,7 @@ async def main():
         # Everything else is driven by the background tasks and event bus.
         await shutdown_event.wait()
     finally:
+        await state_machine.shutdown()
         wake_word_detector.stop()
         audio_out.stop()
         await audio_in.stop()

@@ -1,3 +1,4 @@
+import asyncio
 import numpy as np
 from faster_whisper import WhisperModel
 
@@ -17,7 +18,10 @@ class FasterWhisperSTT:
             )
         return self._model
 
+    async def warmup(self):
+        await asyncio.to_thread(lambda: self.model)
+
     async def transcribe(self, audio: np.ndarray) -> str:
-        segments, _ = self.model.transcribe(audio, language="en")
+        segments, _ = await asyncio.to_thread(self.model.transcribe, audio, language=self._config.stt.language)
         text = "".join(segment.text for segment in segments)
         return text.strip()

@@ -18,10 +18,10 @@ class GroqClient:
 
     def _load_system_prompt(self, path: str) -> str:
         try:
-            with open(path) as f:
+            with open(path, encoding="utf-8") as f:
                 return f.read().strip()
         except FileNotFoundError:
-            return "You are D.A.I.S.Y., a helpful AI assistant."
+            return "You are D.A.I.S.Y., a personal AI assistant running on a server called Andromeda. Address the user as 'Boss'. Be sharp, efficient, and precise. Lead with short, direct sentences."
 
     async def stream_tokens(self, user_message: str):
         stream = await self.client.chat.completions.create(

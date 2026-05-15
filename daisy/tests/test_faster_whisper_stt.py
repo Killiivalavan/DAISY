@@ -8,6 +8,7 @@ class FakeConfig:
         model = "tiny.en"
         device = "cpu"
         compute_type = "int8"
+        language = "en"
 
     stt = SttConfig()
 

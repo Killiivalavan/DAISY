@@ -1,3 +1,5 @@
+import asyncio
+import time
 import numpy as np
 import torch
 from silero_vad import load_silero_vad
@@ -13,6 +15,10 @@ class SileroVAD:
         self.speech_start_frames = config.vad.speech_start_frames
         self.speech_end_frames = config.vad.speech_end_frames
         self.max_recording_seconds = config.vad.max_recording_seconds
+        self.startup_ignore_ms = config.vad.startup_ignore_ms
+
+    async def warmup(self):
+        await asyncio.to_thread(lambda: self.model)
 
     @property
     def model(self):
@@ -27,16 +33,17 @@ class SileroVAD:
         return prob
 
     async def listen(self, audio_input, timeout: float = None) -> np.ndarray:
-        import time
         import asyncio
 
         # Flush the old audio queue so we don't process audio from 
         # while D.A.I.S.Y. was speaking or processing.
-        while not audio_input._queue.empty():
-            try:
-                audio_input._queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
+        audio_input.flush()
+
+        # Skip audio for startup_ignore_ms to avoid processing stale audio
+        # from the wake word period
+        startup_chunks = int(self.startup_ignore_ms / (self.chunk_size / self.sample_rate * 1000))
+        for _ in range(startup_chunks):
+            await audio_input.read()
 
         ring_buffer_size = 15
         ring_buffer = []
@@ -45,7 +52,7 @@ class SileroVAD:
         silence_frames = 0
         is_speaking = False
         recording_start = 0.0
-        listen_start = time.time()
+        listen_start = time.monotonic()
         
         window_size = 10
         speech_history = [False] * window_size
@@ -59,7 +66,7 @@ class SileroVAD:
             if frame.dtype != np.float32:
                 # If it's int16, normalize to [-1, 1]
                 if frame.dtype == np.int16:
-                    frame = frame.astype(np.float32) / 32767.0
+                    frame = frame.astype(np.float32) / 32768.0
                 else:
                     frame = frame.astype(np.float32)
 
@@ -76,7 +83,7 @@ class SileroVAD:
 
             if not is_speaking:
                 # Timeout check: If we haven't started speaking and the timer expires
-                if timeout is not None and (time.time() - listen_start) > timeout:
+                if timeout is not None and (time.monotonic() - listen_start) > timeout:
                     print("  [VAD] Listening timed out.", file=__import__("sys").stderr)
                     return None
 
@@ -91,7 +98,7 @@ class SileroVAD:
                     is_speaking = True
                     silence_frames = 0
                     buffer = list(ring_buffer)
-                    recording_start = time.time()
+                    recording_start = time.monotonic()
             else:
                 buffer.append(frame)
                 if is_speech:
@@ -105,6 +112,6 @@ class SileroVAD:
                         print(f"  [VAD Debug] Reached {silence_frames} silence frames, returning audio.", file=__import__("sys").stderr)
                         return np.concatenate(buffer)
 
-                if time.time() - recording_start > self.max_recording_seconds:
+                if time.monotonic() - recording_start > self.max_recording_seconds:
                     print(f"  [VAD Debug] Reached max recording seconds, returning audio.", file=__import__("sys").stderr)
                     return np.concatenate(buffer)
