@@ -39,6 +39,36 @@ pipeline:
 
 mode: wake_word
 
+memory:
+  max_turns: 20
+  db_path: ~/.daisy/memory.db
+  inject_facts: true
+  max_facts_to_inject: 15
+
 wake_word:
   model: models/daisy.tflite
-  threshold: 0.2
+  threshold: 0.4
+
+tools:
+  enabled: true
+  allowed_directories:
+    - "/home/bashman"
+    - "/tmp"
+    - "/home/bashman/Code"
+  file_max_size_bytes: 1048576
+  allowed_commands:
+    - "df"
+    - "free"
+    - "uptime"
+    - "uname"
+    - "whoami"
+    - "ls"
+    - "cat"
+    - "ps"
+    - "ping"
+    - "systemctl"
+  default_timeout: 30
+  max_timeout: 300
+  opencode:
+    enabled: true
+    project_root: "/home/bashman/Code"

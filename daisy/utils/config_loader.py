@@ -61,6 +61,25 @@ class PipelineConfig(BaseModel):
     listening_timeout: int = 10
     processing_timeout: int = 30
 
+class OpenCodeConfig(BaseModel):
+    enabled: bool = True
+    project_root: str = "/home/bashman/Code"
+
+class ToolsConfig(BaseModel):
+    enabled: bool = True
+    allowed_directories: list[str] = ["/home/bashman", "/tmp"]
+    file_max_size_bytes: int = 1048576
+    allowed_commands: list[str] = ["df", "free", "uptime", "uname", "whoami", "ls", "cat", "ps", "ping", "systemctl"]
+    default_timeout: int = 30
+    max_timeout: int = 300
+    opencode: OpenCodeConfig = OpenCodeConfig()
+
+class MemoryConfig(BaseModel):
+    max_turns: int = 20
+    db_path: str = "~/.daisy/memory.db"
+    inject_facts: bool = True
+    max_facts_to_inject: int = 15
+
 class Config(BaseModel):
     audio: AudioConfig = AudioConfig()
     vad: VADConfig = VADConfig()
@@ -69,6 +88,8 @@ class Config(BaseModel):
     tts: TTSConfig = TTSConfig()
     pipeline: PipelineConfig = PipelineConfig()
     wake_word: WakeWordConfig = WakeWordConfig()
+    memory: MemoryConfig = MemoryConfig()
+    tools: ToolsConfig = ToolsConfig()
     mode: str = "wake_word"
 
 

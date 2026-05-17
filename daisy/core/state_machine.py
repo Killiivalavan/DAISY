@@ -1,6 +1,11 @@
 import asyncio
+import json
 import logging
 from statemachine import StateMachine, State
+
+from daisy.llm.sentence_splitter import SentenceSplitter
+from daisy.tools.task_tracker import TaskTracker
+from daisy.tools.announcement_queue import AnnouncementQueue
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +21,17 @@ class DaisyStateMachine(StateMachine):
     boot = init.to(idle)
     wake_up = idle.to(listening) | listening.to(listening) | speaking.to(listening)
     speech_detected = listening.to(processing)
+    announce = idle.to(processing) | listening.to(processing)
     response_ready = processing.to(speaking)
     turn_complete = speaking.to(listening) | processing.to(listening)
     timed_out = listening.to(idle)
 
-    def __init__(self, config, event_bus, audio_in, audio_out, vad, stt, llm, tts, wake_word_detector):
+    def __init__(
+        self, config, event_bus, audio_in, audio_out, vad, stt, llm, tts,
+        wake_word_detector, memory_manager,
+        task_tracker=None, announcement_queue=None,
+        tool_handlers=None, tool_schemas=None,
+    ):
         self.config = config
         self.event_bus = event_bus
         self.audio_in = audio_in
@@ -30,18 +41,38 @@ class DaisyStateMachine(StateMachine):
         self.llm = llm
         self.tts = tts
         self.wake_word_detector = wake_word_detector
+        self.memory_manager = memory_manager
+        self.task_tracker = task_tracker
+        self.announcement_queue = announcement_queue
+        self.tool_handlers = tool_handlers
+        self.tool_schemas = tool_schemas
         
         self.current_audio_buffer = None
+        self.current_announcement = None
         self.sentence_queue = None
+        self._last_response = None
         
         # Subscribe to global events
         self.event_bus.subscribe("WAKE", self.on_wake_event)
+
+        # Wire task tracker completion to announcement queue
+        if self.task_tracker and self.announcement_queue:
+            self.task_tracker.set_announce_callback(self._on_task_completed)
         
         # Must call super last
         super().__init__()
 
+    async def _on_task_completed(self, task_id: str, description: str, result):
+        await self.announcement_queue.push({
+            "task_id": task_id,
+            "summary": f"'{description}' completed.",
+            "type": "task_complete",
+            "priority": 2,
+        })
+
     async def shutdown(self):
-        for name in ("_speaking_task", "_processing_task", "_listening_task", "_llm_task"):
+        self.memory_manager.end_session()
+        for name in ("_speaking_task", "_processing_task", "_listening_task", "_llm_task", "_summarize_task"):
             task = getattr(self, name, None)
             if task is not None and not task.done():
                 task.cancel()
@@ -83,26 +114,51 @@ class DaisyStateMachine(StateMachine):
         except Exception as e:
             logger.error(f"Error during response_ready transition: {e}")
 
+    async def _safe_announce(self):
+        try:
+            await self.announce()
+        except Exception as e:
+            logger.error(f"Error during announce transition: {e}")
+
     # --- IDLE STATE ---
     async def on_enter_idle(self):
         logger.info("[State] Entering IDLE")
+
+        if self.announcement_queue and self.announcement_queue.has_pending:
+            logger.info("[State] Announcement pending, skipping wake word")
+            await asyncio.sleep(2)
+            asyncio.create_task(self._safe_announce())
+            return
+
+        self._summarize_task = asyncio.create_task(
+            self.memory_manager.summarize_session(self.llm)
+        )
         if not self.wake_word_detector.is_listening:
             self.wake_word_detector.start(self.audio_in)
 
     async def on_exit_idle(self):
         logger.info("[State] Exiting IDLE")
         self.wake_word_detector.stop()
+        task = getattr(self, '_summarize_task', None)
+        if task and not task.done():
+            task.cancel()
 
     # --- LISTENING STATE ---
     async def on_enter_listening(self):
         logger.info("[State] Entering LISTENING")
-        
-        # Only beep if coming from IDLE (a fresh wake word)
-        # statemachine passes the event that triggered the transition. 
-        # But a simpler way is to just beep. We'll beep for now to indicate mic is hot.
+
+        response = getattr(self, '_last_response', None)
+        if response:
+            self.memory_manager.record_turn("assistant", response)
+            self._last_response = None
+
+        if self.announcement_queue and self.announcement_queue.has_pending:
+            logger.info("[State] Announcement pending, returning to IDLE")
+            asyncio.create_task(self._safe_timed_out())
+            return
+
         print("  [system] *beep* (Mic is hot)", file=__import__("sys").stderr)
-        
-        # Start a background task for VAD listening to not block the state transition
+
         self._listening_task = asyncio.create_task(self._do_listen())
 
     async def on_exit_listening(self):
@@ -129,7 +185,11 @@ class DaisyStateMachine(StateMachine):
     # --- PROCESSING STATE ---
     async def on_enter_processing(self):
         logger.info("[State] Entering PROCESSING")
-        self._processing_task = asyncio.create_task(self._do_process())
+        if self.announcement_queue and self.announcement_queue.has_pending:
+            self.current_announcement = await self.announcement_queue.pop()
+            self._processing_task = asyncio.create_task(self._do_announce())
+        else:
+            self._processing_task = asyncio.create_task(self._do_process())
 
     async def on_exit_processing(self):
         if hasattr(self, '_processing_task') and not self._processing_task.done():
@@ -149,15 +209,57 @@ class DaisyStateMachine(StateMachine):
                 logger.info("[State] Empty transcript, returning to IDLE")
                 asyncio.create_task(self._safe_turn_complete())
                 return
-                
-            from daisy.llm.sentence_splitter import SentenceSplitter
+
+            self.memory_manager.record_turn("user", text)
+            messages = self.memory_manager.build_context(text)
+
+            # Phase 1: Tool detection loop (non-streaming)
+            tools = self.tool_schemas if self.tool_handlers else None
+            tool_rounds = 0
+            while tools and tool_rounds < 5:
+                response = await self.llm.complete(messages, tools=tools)
+                if not response.tool_calls:
+                    messages.append({"role": "assistant", "content": response.content or ""})
+                    break
+
+                for tool_call in response.tool_calls:
+                    func_name = tool_call.function.name
+                    handler = self.tool_handlers.get(func_name)
+                    if not handler:
+                        logger.warning(f"[State] No handler for tool: {func_name}")
+                        continue
+
+                    try:
+                        args = json.loads(tool_call.function.arguments)
+                    except (json.JSONDecodeError, TypeError):
+                        args = {}
+
+                    logger.info(f"[State] Tool call: {func_name}({args})")
+                    print(f"  [Tool] {func_name}({args})", file=__import__("sys").stderr)
+
+                    result = await handler(**args)
+                    logger.info(f"[State] Tool result: {str(result)[:200]}")
+
+                    assistant_msg = response.model_dump()
+                    assistant_msg["content"] = None
+                    messages.append(assistant_msg)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": str(result)[:2000],
+                    })
+
+                tool_rounds += 1
+
+            # Phase 2: Stream final response
             self.sentence_queue = asyncio.Queue()
             splitter = SentenceSplitter()
-            
-            # Create the LLM streaming task
+
             async def llm_worker():
+                full_response = []
                 try:
-                    async for token in self.llm.stream_tokens(text):
+                    async for token in self.llm.stream_tokens(messages):
+                        full_response.append(token)
                         sentence = splitter.process_token(token)
                         if sentence:
                             await self.sentence_queue.put(sentence)
@@ -167,17 +269,63 @@ class DaisyStateMachine(StateMachine):
                 except Exception as e:
                     logger.error(f"LLM Worker error: {e}")
                 finally:
-                    await self.sentence_queue.put(None) # EOF
+                    await self.sentence_queue.put(None)
+                    self._last_response = "".join(full_response)
 
             self._llm_task = asyncio.create_task(llm_worker())
-            
-            # Transition to SPEAKING state so TTS can start pulling from the queue immediately
+
             asyncio.create_task(self._safe_response_ready())
-            
+
         except asyncio.CancelledError:
             pass
         except Exception as e:
             logger.error(f"[State] Error in PROCESSING: {e}")
+            asyncio.create_task(self._safe_turn_complete())
+
+    async def _do_announce(self):
+        try:
+            announcement = self.current_announcement
+            if not announcement:
+                asyncio.create_task(self._safe_turn_complete())
+                return
+
+            summary = announcement.get("summary", "Something completed.")
+            prompt = (
+                f"You need to proactively inform the user about a completed task. "
+                f"Be natural and brief. The user is not in the middle of a conversation "
+                f"with you, so greet them naturally. Here is the information: {summary}"
+            )
+
+            self.memory_manager.record_turn("user", f"[system notification: {summary}]")
+            messages = self.memory_manager.build_context(prompt)
+
+            self.sentence_queue = asyncio.Queue()
+            splitter = SentenceSplitter()
+
+            async def llm_worker():
+                full_response = []
+                try:
+                    async for token in self.llm.stream_tokens(messages):
+                        full_response.append(token)
+                        sentence = splitter.process_token(token)
+                        if sentence:
+                            await self.sentence_queue.put(sentence)
+                    remaining = splitter.flush()
+                    if remaining:
+                        await self.sentence_queue.put(remaining)
+                except Exception as e:
+                    logger.error(f"Announce LLM Worker error: {e}")
+                finally:
+                    await self.sentence_queue.put(None)
+                    self._last_response = "".join(full_response)
+
+            self._llm_task = asyncio.create_task(llm_worker())
+            asyncio.create_task(self._safe_response_ready())
+
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"[State] Error in ANNOUNCE: {e}")
             asyncio.create_task(self._safe_turn_complete())
 
     # --- SPEAKING STATE ---
