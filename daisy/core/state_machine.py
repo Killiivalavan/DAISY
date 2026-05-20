@@ -219,7 +219,6 @@ class DaisyStateMachine(StateMachine):
             while tools and tool_rounds < 5:
                 response = await self.llm.complete(messages, tools=tools)
                 if not response.tool_calls:
-                    messages.append({"role": "assistant", "content": response.content or ""})
                     break
 
                 for tool_call in response.tool_calls:
@@ -231,6 +230,8 @@ class DaisyStateMachine(StateMachine):
 
                     try:
                         args = json.loads(tool_call.function.arguments)
+                        if args is None:
+                            args = {}
                     except (json.JSONDecodeError, TypeError):
                         args = {}
 
@@ -240,8 +241,21 @@ class DaisyStateMachine(StateMachine):
                     result = await handler(**args)
                     logger.info(f"[State] Tool result: {str(result)[:200]}")
 
-                    assistant_msg = response.model_dump()
-                    assistant_msg["content"] = None
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                            for tc in response.tool_calls
+                        ],
+                    }
                     messages.append(assistant_msg)
                     messages.append({
                         "role": "tool",
