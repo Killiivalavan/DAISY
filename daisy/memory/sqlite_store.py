@@ -91,9 +91,10 @@ class SQLiteStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def delete_fact(self, key: str):
-        self._conn.execute("DELETE FROM facts WHERE key=?", (key,))
+    def delete_fact(self, key: str) -> bool:
+        cur = self._conn.execute("DELETE FROM facts WHERE key=?", (key,))
         self._conn.commit()
+        return cur.rowcount > 0
 
     def start_session(self) -> int:
         cur = self._conn.execute("INSERT INTO sessions DEFAULT VALUES")

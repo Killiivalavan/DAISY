@@ -9,6 +9,33 @@ from daisy.tools.announcement_queue import AnnouncementQueue
 
 logger = logging.getLogger(__name__)
 
+
+def _compute_envelope(audio, sample_rate: int, window_ms: int = 50):
+    """Compute RMS amplitude envelope from PCM audio.
+
+    Returns (envelope, duration_s) where envelope is a list of floats
+    0-1 representing amplitude over ~50ms windows, and duration_s is
+    the total audio length in seconds.
+    """
+    import numpy as np
+
+    window_samples = max(1, int(sample_rate * window_ms / 1000))
+    num_windows = max(1, len(audio) // window_samples)
+    envelope = []
+
+    for i in range(num_windows):
+        start = i * window_samples
+        end = start + window_samples
+        window = audio[start:end].astype(np.float32)
+        rms = float(np.sqrt(np.mean(window ** 2)))
+        # Kokoro outputs float32 in [-1, 1]; typical speech RMS is ~0.05-0.25
+        normalized = round(min(1.0, rms / 0.2), 3)
+        envelope.append(normalized)
+
+    duration_s = len(audio) / sample_rate
+    return envelope, duration_s
+
+
 class DaisyStateMachine(StateMachine):
     # States
     init = State(initial=True)
@@ -27,15 +54,16 @@ class DaisyStateMachine(StateMachine):
     timed_out = listening.to(idle)
 
     def __init__(
-        self, config, event_bus, audio_in, audio_out, vad, stt, llm, tts,
+        self, config, event_bus, audio_source, audio_sinks, vad, stt, llm, tts,
         wake_word_detector, memory_manager,
         task_tracker=None, announcement_queue=None,
         tool_handlers=None, tool_schemas=None,
+        event_bridge=None,
     ):
         self.config = config
         self.event_bus = event_bus
-        self.audio_in = audio_in
-        self.audio_out = audio_out
+        self.audio_source = audio_source
+        self.audio_sinks = audio_sinks  # list[AudioSink] — local + remote clients
         self.vad = vad
         self.stt = stt
         self.llm = llm
@@ -46,21 +74,56 @@ class DaisyStateMachine(StateMachine):
         self.announcement_queue = announcement_queue
         self.tool_handlers = tool_handlers
         self.tool_schemas = tool_schemas
-        
+        self._event_bridge = event_bridge
+
         self.current_audio_buffer = None
         self.current_announcement = None
         self.sentence_queue = None
         self._last_response = None
-        
+        self._on_state_change = None  # callback(state_name) for event bridge
+
         # Subscribe to global events
         self.event_bus.subscribe("WAKE", self.on_wake_event)
 
         # Wire task tracker completion to announcement queue
         if self.task_tracker and self.announcement_queue:
             self.task_tracker.set_announce_callback(self._on_task_completed)
-        
+
         # Must call super last
         super().__init__()
+
+    def set_state_change_callback(self, callback):
+        """Register a callback(state_name) called on every state entry.
+
+        Used by the EventBridge to broadcast state to WebSocket clients.
+        """
+        self._on_state_change = callback
+
+    def set_audio_source(self, source):
+        """Swap the active audio input source (local mic → remote client or vice versa)."""
+        self.audio_source = source
+
+    def add_audio_sink(self, sink):
+        """Add an audio output sink (e.g., new remote client)."""
+        if sink not in self.audio_sinks:
+            self.audio_sinks.append(sink)
+
+    def remove_audio_sink(self, sink):
+        """Remove an audio output sink (e.g., client disconnected)."""
+        if sink in self.audio_sinks:
+            self.audio_sinks.remove(sink)
+
+    async def process_text(self, text: str):
+        """Entry point for text input from API clients.
+
+        Bypasses wake word + VAD + STT. Injects text directly into processing.
+        """
+        self._injected_text = text
+        self.current_audio_buffer = None
+        if self.idle.is_active:
+            await self.announce()
+        elif self.listening.is_active:
+            await self.speech_detected()
 
     async def _on_task_completed(self, task_id: str, description: str, result):
         await self.announcement_queue.push({
@@ -80,7 +143,7 @@ class DaisyStateMachine(StateMachine):
     async def on_wake_event(self, data=None):
         """Triggered by the event bus when wake word is detected."""
         if not self.listening.is_active:
-            # We run the transition in a separate task to avoid deadlocks 
+            # We run the transition in a separate task to avoid deadlocks
             # if the detector task is cancelled during the transition.
             asyncio.create_task(self._safe_wake_up())
 
@@ -124,6 +187,9 @@ class DaisyStateMachine(StateMachine):
     async def on_enter_idle(self):
         logger.info("[State] Entering IDLE")
 
+        if self._on_state_change:
+            self._on_state_change("idle")
+
         if self.announcement_queue and self.announcement_queue.has_pending:
             logger.info("[State] Announcement pending, skipping wake word")
             await asyncio.sleep(2)
@@ -134,7 +200,7 @@ class DaisyStateMachine(StateMachine):
             self.memory_manager.summarize_session(self.llm)
         )
         if not self.wake_word_detector.is_listening:
-            self.wake_word_detector.start(self.audio_in)
+            self.wake_word_detector.start(self.audio_source)
 
     async def on_exit_idle(self):
         logger.info("[State] Exiting IDLE")
@@ -146,6 +212,9 @@ class DaisyStateMachine(StateMachine):
     # --- LISTENING STATE ---
     async def on_enter_listening(self):
         logger.info("[State] Entering LISTENING")
+
+        if self._on_state_change:
+            self._on_state_change("listening")
 
         response = getattr(self, '_last_response', None)
         if response:
@@ -167,9 +236,8 @@ class DaisyStateMachine(StateMachine):
 
     async def _do_listen(self):
         try:
-            # We pass a timeout to the VAD so it doesn't hang forever
-            audio_buffer = await self.vad.listen(self.audio_in, timeout=self.config.pipeline.listening_timeout)
-            
+            audio_buffer = await self.vad.listen(self.audio_source, timeout=self.config.pipeline.listening_timeout)
+
             if audio_buffer is not None and len(audio_buffer) > 0:
                 self.current_audio_buffer = audio_buffer
                 asyncio.create_task(self._safe_speech_detected())
@@ -185,6 +253,8 @@ class DaisyStateMachine(StateMachine):
     # --- PROCESSING STATE ---
     async def on_enter_processing(self):
         logger.info("[State] Entering PROCESSING")
+        if self._on_state_change:
+            self._on_state_change("processing")
         if self.announcement_queue and self.announcement_queue.has_pending:
             self.current_announcement = await self.announcement_queue.pop()
             self._processing_task = asyncio.create_task(self._do_announce())
@@ -197,18 +267,28 @@ class DaisyStateMachine(StateMachine):
 
     async def _do_process(self):
         try:
-            if self.current_audio_buffer is None:
+            text = getattr(self, '_injected_text', None)
+            if text is not None:
+                self._injected_text = None
+                logger.info(f"[State] Text input: '{text}'")
+            elif self.current_audio_buffer is not None:
+                text = await self.stt.transcribe(self.current_audio_buffer)
+                logger.info(f"[State] Transcribed: '{text}'")
+            else:
                 asyncio.create_task(self._safe_turn_complete())
                 return
 
-            text = await self.stt.transcribe(self.current_audio_buffer)
-            logger.info(f"[State] Transcribed: '{text}'")
-            print(f"You: {text}")
-            
             if not text:
-                logger.info("[State] Empty transcript, returning to IDLE")
+                logger.info("[State] Empty text, returning to IDLE")
                 asyncio.create_task(self._safe_turn_complete())
                 return
+
+            # Broadcast transcript to frontend clients
+            if self._event_bridge:
+                asyncio.create_task(self._event_bridge.broadcast_transcript(text))
+
+            if self.current_audio_buffer is not None:
+                print(f"You: {text}")
 
             self.memory_manager.record_turn("user", text)
             messages = self.memory_manager.build_context(text)
@@ -277,14 +357,26 @@ class DaisyStateMachine(StateMachine):
                         sentence = splitter.process_token(token)
                         if sentence:
                             await self.sentence_queue.put(sentence)
+                            if self._event_bridge:
+                                await self._event_bridge.broadcast_sentence(sentence)
                     remaining = splitter.flush()
                     if remaining:
                         await self.sentence_queue.put(remaining)
+                        if self._event_bridge:
+                            await self._event_bridge.broadcast_sentence(remaining)
                 except Exception as e:
                     logger.error(f"LLM Worker error: {e}")
+                    if self._event_bridge:
+                        asyncio.create_task(
+                            self._event_bridge.broadcast_error(f"LLM error: {e}")
+                        )
                 finally:
                     await self.sentence_queue.put(None)
                     self._last_response = "".join(full_response)
+                    if self._event_bridge and self._last_response:
+                        asyncio.create_task(
+                            self._event_bridge.broadcast_response_complete(self._last_response)
+                        )
 
             self._llm_task = asyncio.create_task(llm_worker())
 
@@ -324,14 +416,26 @@ class DaisyStateMachine(StateMachine):
                         sentence = splitter.process_token(token)
                         if sentence:
                             await self.sentence_queue.put(sentence)
+                            if self._event_bridge:
+                                await self._event_bridge.broadcast_sentence(sentence)
                     remaining = splitter.flush()
                     if remaining:
                         await self.sentence_queue.put(remaining)
+                        if self._event_bridge:
+                            await self._event_bridge.broadcast_sentence(remaining)
                 except Exception as e:
                     logger.error(f"Announce LLM Worker error: {e}")
+                    if self._event_bridge:
+                        asyncio.create_task(
+                            self._event_bridge.broadcast_error(f"LLM error: {e}")
+                        )
                 finally:
                     await self.sentence_queue.put(None)
                     self._last_response = "".join(full_response)
+                    if self._event_bridge and self._last_response:
+                        asyncio.create_task(
+                            self._event_bridge.broadcast_response_complete(self._last_response)
+                        )
 
             self._llm_task = asyncio.create_task(llm_worker())
             asyncio.create_task(self._safe_response_ready())
@@ -345,6 +449,8 @@ class DaisyStateMachine(StateMachine):
     # --- SPEAKING STATE ---
     async def on_enter_speaking(self):
         logger.info("[State] Entering SPEAKING")
+        if self._on_state_change:
+            self._on_state_change("speaking")
         self._speaking_task = asyncio.create_task(self._do_speak())
 
     async def on_exit_speaking(self):
@@ -352,7 +458,8 @@ class DaisyStateMachine(StateMachine):
             self._speaking_task.cancel()
         if hasattr(self, '_llm_task') and not self._llm_task.done():
             self._llm_task.cancel()
-        self.audio_out.clear()
+        for sink in self.audio_sinks:
+            sink.clear()
         if self.sentence_queue is not None:
             while not self.sentence_queue.empty():
                 try:
@@ -368,15 +475,29 @@ class DaisyStateMachine(StateMachine):
                     if sentence is None:
                         break
                     audio = await self.tts.synthesize(sentence)
-                    self.audio_out.play(audio)
+                    for sink in self.audio_sinks:
+                        sink.play(audio)
+                    if self._event_bridge and len(audio) > 0:
+                        try:
+                            import numpy as np
+                            sample_rate = getattr(
+                                getattr(self.config.tts, 'kokoro', None), 'sample_rate', 24000
+                            )
+                            envelope, duration = _compute_envelope(audio, sample_rate)
+                            asyncio.create_task(
+                                self._event_bridge.broadcast_audio_envelope(envelope, duration)
+                            )
+                        except Exception:
+                            pass  # Envelope is cosmetic — never break the pipeline
 
             tts_task = asyncio.create_task(tts_worker())
-            
+
             if hasattr(self, '_llm_task'):
                 await self._llm_task
             await tts_task
-            await self.audio_out.wait_until_done()
-            
+            for sink in self.audio_sinks:
+                await sink.wait_until_done()
+
             logger.info("[State] Finished speaking.")
             asyncio.create_task(self._safe_turn_complete())
         except asyncio.CancelledError:

@@ -4,19 +4,16 @@ audio:
   chunk_size: 512
   input_device: null
   output_device: null
-
 vad:
   speech_start_frames: 4
   speech_end_frames: 25
   max_recording_seconds: 15
   startup_ignore_ms: 500
   silero_threshold: 0.5
-
 stt:
   model: small.en
   device: cpu
   compute_type: int8
-
 llm:
   primary: groq
   groq:
@@ -26,49 +23,46 @@ llm:
     max_tokens: 1024
     base_url: https://api.groq.com/openai/v1
   system_prompt_path: SOUL.md
-
 tts:
   primary: kokoro
   kokoro:
     voice: af_heart
     sample_rate: 24000
-
 pipeline:
   listening_timeout: 10
   processing_timeout: 30
-
 mode: wake_word
-
 memory:
   max_turns: 20
   db_path: ~/.daisy/memory.db
   inject_facts: true
   max_facts_to_inject: 15
-
 wake_word:
   model: models/daisy.tflite
   threshold: 0.4
-
+api:
+  host: 0.0.0.0
+  port: 8443
 tools:
   enabled: true
   allowed_directories:
-    - "/home/bashman"
-    - "/tmp"
-    - "/home/bashman/Code"
+  - /home/bashman
+  - /tmp
+  - /home/bashman/Code
   file_max_size_bytes: 1048576
   allowed_commands:
-    - "df"
-    - "free"
-    - "uptime"
-    - "uname"
-    - "whoami"
-    - "ls"
-    - "cat"
-    - "ps"
-    - "ping"
-    - "systemctl"
+  - df
+  - free
+  - uptime
+  - uname
+  - whoami
+  - ls
+  - cat
+  - ps
+  - ping
+  - systemctl
   default_timeout: 30
   max_timeout: 300
   opencode:
     enabled: true
-    project_root: "/home/bashman/Code"
+    project_root: /home/bashman/Code

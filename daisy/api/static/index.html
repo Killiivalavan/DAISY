@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#050508">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DAISY">
+    <meta name="description" content="D.A.I.S.Y. — Personal AI Assistant">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/icons/daisy-192.png">
+    <link rel="apple-touch-icon" href="/icons/daisy-512.png">
+    <link rel="stylesheet" href="/css/daisy.css">
+    <title>D.A.I.S.Y.</title>
+</head>
+<body>
+    <!-- Orb canvas (full viewport, behind everything) -->
+    <canvas id="orb-canvas"></canvas>
+
+    <!-- Connecting overlay -->
+    <div id="connecting-overlay">
+        <div class="orb-loader"></div>
+        <p>Connecting to D.A.I.S.Y...</p>
+    </div>
+
+    <!-- Status bar (top, always visible) -->
+    <div id="status-bar">
+        <span id="status-dot"></span>
+        <span id="status-label">IDLE</span>
+    </div>
+
+    <!-- Hamburger menu (desktop) -->
+    <nav id="desktop-nav">
+        <button id="menu-btn" class="ghost-btn" title="Menu">
+            <span class="menu-icon">
+                <span></span><span></span><span></span>
+            </span>
+        </button>
+        <div id="menu-dropdown" class="hidden">
+            <button data-panel="panel-history">History</button>
+            <button data-panel="panel-memory">Memory</button>
+            <button data-panel="panel-settings">Settings</button>
+        </div>
+    </nav>
+
+    <!-- Chat panel (collapsible, slides up from bottom) -->
+    <div id="chat-panel" class="collapsed">
+        <div id="chat-inner">
+            <div id="transcript-area">
+                <div id="transcript-container"></div>
+            </div>
+            <div id="input-area">
+                <input type="text" id="text-input" placeholder="Message DAISY..."
+                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                <button id="send-btn" title="Send">&#x2191;</button>
+                <button id="voice-btn" title="Voice">&#x1F399;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat toggle — thin pill, sits above the input area when open -->
+    <button id="chat-toggle" title="Toggle chat">
+        <span></span>
+    </button>
+
+    <!-- Mobile bottom nav -->
+    <nav id="bottom-nav">
+        <button data-panel="panel-history">History</button>
+        <button data-panel="panel-memory">Memory</button>
+        <button data-panel="panel-settings">Settings</button>
+    </nav>
+
+    <!-- History panel -->
+    <div id="panel-history" class="slide-panel hidden">
+        <div class="panel-header">
+            <h3>History</h3>
+            <button class="panel-close">&times;</button>
+        </div>
+        <div class="panel-content" id="history-content">
+            <p class="empty-state">No history yet.</p>
+        </div>
+    </div>
+
+    <!-- Memory panel -->
+    <div id="panel-memory" class="slide-panel hidden">
+        <div class="panel-header">
+            <h3>Memory</h3>
+            <button class="panel-close">&times;</button>
+        </div>
+        <div class="panel-content" id="memory-content">
+            <p class="empty-state">No facts stored yet.</p>
+        </div>
+    </div>
+
+    <!-- Settings panel -->
+    <div id="panel-settings" class="slide-panel hidden">
+        <div class="panel-header">
+            <h3>Settings</h3>
+            <button class="panel-close">&times;</button>
+        </div>
+        <div class="panel-content" id="settings-content">
+            <p class="empty-state">Loading settings...</p>
+        </div>
+    </div>
+
+    <!-- Three.js import map -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/js/three/build/three.module.js",
+            "three/addons/": "/js/three/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module" src="/js/app.js"></script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function () {});
+        }
+    </script>
+</body>
+</html>

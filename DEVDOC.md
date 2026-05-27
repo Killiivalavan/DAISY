@@ -1,6 +1,6 @@
 # D.A.I.S.Y. v2 — Project Requirements Document
 
-**D**omestic **A**rtificial **I**ntelligence **SY**stem  
+**D**ialoue-driven **A**gentic **I**ntelligence for **S**eamless **Y**ield  
 **Version**: 2.0.0  
 **Status**: Pre-Development  
 **Author**: Killiivalavan  
@@ -62,7 +62,7 @@ Build a personal AI assistant that genuinely feels like J.A.R.V.I.S. from Iron M
 | Knows when you're talking to it | OpenWakeWord custom trigger |
 | Can be interrupted mid-sentence | Barge-in with AEC + hard stop + task cancel |
 | Remembers everything | Multi-tier memory system |
-| Can actually do things | Tool/agent layer via OpenClaw |
+| Can actually do things | Custom tool layer with 13 built-in tools |
 | Consistent personality | SOUL.md system prompt, locked |
 
 ---
@@ -122,8 +122,8 @@ Coqui was slow and voice quality was inconsistent. v2 uses Kokoro-TTS (faster, m
 │  └──────────────┘    │                                      │  │
 │                       │  ┌────────────┐  ┌───────────────┐  │  │
 │                       │  │  Memory    │  │  Tool Layer   │  │  │
-│                       │  │  SQLite    │  │  OpenClaw     │  │  │
-│                       │  │  ChromaDB  │  │  (subprocess) │  │  │
+│                       │  │  SQLite    │  │  Custom Tools │  │  │
+│                       │  │  ChromaDB  │  │  (Python)     │  │  │
 │                       │  └────────────┘  └───────────────┘  │  │
 │                       └──────────────────────────────────────┘  │
 │                                    │                             │
@@ -176,7 +176,7 @@ User speaks "DAISY, what's the weather?"
 | Memory (short) | In-process conversation buffer | Fast, no overhead | Free |
 | Memory (medium) | SQLite | Session summaries, fact store, zero setup | Free |
 | Memory (long) | ChromaDB | Vector semantic recall, embedded Python, no server | Free |
-| Tools / Agent | OpenClaw (Node.js daemon) | Browser automation, file ops, multi-channel, skill ecosystem | Free |
+| Tools / Agent | Custom Python tool framework | System, web, file, and background task tools via direct Python | Free |
 | API Server | FastAPI + uvicorn | Async, fast, WebSocket support, you know it | Free |
 | Transport | WebSockets | Real-time bidirectional for PWA client | Free |
 | Secure Access | Tailscale | Already deployed on Andromeda | Free |
@@ -408,23 +408,24 @@ Three-tier memory architecture. Each tier serves a different time horizon and re
 
 ### 5.8 Tool / Agent Layer
 
-**Framework**: OpenClaw (Node.js daemon, runs alongside D.A.I.S.Y. on Andromeda)  
-**Integration pattern**: D.A.I.S.Y. is the orchestrator. OpenClaw is a tool executor. OpenClaw never drives the conversation.
+**Framework**: Custom Python tool layer built directly into D.A.I.S.Y.'s process  
+**Integration pattern**: Tool handlers are async Python functions registered via a shared schema registry. The LLM's function-calling mechanism routes directly to in-process handlers — no external daemon, no subprocess overhead.
 
-**Why OpenClaw and not building tools from scratch**:
-- Browser automation (Playwright-level): would take weeks to build reliably
-- File system operations with agentic planning: already solved
-- Multi-channel reach (Telegram, Slack, etc.): free community integrations
-- Skill ecosystem (ClawHub): community-maintained tool skills
+**Why custom tools instead of OpenClaw**:
+- OpenClaw (a Node.js daemon) was originally evaluated as the tool executor, but the integration complexity — managing a separate service, cross-process IPC, state synchronization, and debugging across two runtimes — outweighed the benefits for D.A.I.S.Y.'s use case
+- D.A.I.S.Y.'s tool needs are well-defined and finite: web search, file ops, system info, reminders, background tasks. These are straightforward to implement in pure Python
+- Keeping everything in one process eliminates IPC latency, simplifies deployment, and makes error handling deterministic
+- The OpenClaw approach can still be revisited in a future phase if multi-channel or browser automation becomes necessary
 
 **Integration architecture**:
 ```
-LLM generates function call → D.A.I.S.Y. tool dispatcher
+LLM generates function call → tool_registry dispatches to handler
     │
-    ├── Web search → OpenClaw CLI: `openclaw agent --message "search: ..."`
-    ├── File operation → OpenClaw CLI: `openclaw agent --message "file: ..."`  
-    ├── Browser task → OpenClaw CLI: `openclaw agent --message "browse: ..."`
-    └── System info → direct Python (psutil, subprocess) — no OpenClaw needed
+    ├── Web search   → web_tools.py        (httpx + DuckDuckGo + trafilatura)
+    ├── File ops     → file_tools.py        (path-validated read/write)
+    ├── Background   → background_tools.py  (asyncio task spawning)
+    ├── System info  → system_tools.py      (psutil, datetime, subprocess)
+    └── Reminders    → system_tools.py      (asyncio timer + announcement_queue)
 ```
 
 **Tool call latency**: Tool calls are NOT in the latency-critical voice path. D.A.I.S.Y. can say "Let me check that for you, Boss" (immediate TTS) while the tool call executes in background. Result comes back, D.A.I.S.Y. speaks it.
@@ -433,18 +434,26 @@ LLM generates function call → D.A.I.S.Y. tool dispatcher
 
 | Tool | Description | Executor |
 |---|---|---|
-| `web_search` | Search the web for current information | OpenClaw |
-| `browse_url` | Fetch and summarize a specific URL | OpenClaw |
-| `file_read` | Read a file from the filesystem | OpenClaw / direct |
-| `file_write` | Write or modify a file | OpenClaw / direct |
-| `run_command` | Execute a shell command (sandboxed) | OpenClaw |
+| `get_time_date` | Current time, date, and timezone | Python direct (datetime) |
 | `get_system_info` | CPU, RAM, disk, network status | Python direct (psutil) |
-| `memory_store` | Explicitly store a fact to memory | Python direct (SQLite) |
-| `memory_recall` | Explicitly query memory | Python direct |
-| `get_time_date` | Current time and date | Python direct |
+| `run_command` | Execute a shell command (sandboxed, whitelisted) | Python direct (asyncio.subprocess) |
 | `set_reminder` | Schedule a future notification | Python direct (asyncio) |
+| `web_search` | Search the web via DuckDuckGo | Python direct (ddgs) |
+| `browse_url` | Fetch and summarize a specific URL | Python direct (httpx + trafilatura) |
+| `read_file` | Read a file from allowed directories | Python direct (path-validated) |
+| `write_file` | Write content to a file | Python direct (path-validated) |
+| `spawn_task` | Run a shell command or sub-agent in background | Python direct (asyncio.create_task) |
+| `spawn_opencode_task` | Launch an OpenCode coding task in background | Python direct (asyncio.subprocess) |
+| `get_task_status` | Check status of a background task by UUID | Python direct (task_tracker) |
+| `list_tasks` | List recent background tasks | Python direct (task_tracker) |
+| `cancel_task` | Cancel a running background task | Python direct (task_tracker) |
 
-**Safety**: Tool calls involving file writes or shell commands require a brief verbal confirmation before executing. "Boss, you want me to delete that? Just confirming." This is configurable and can be disabled for trusted commands.
+**Safety**: 
+- Shell commands restricted to a whitelist (`df`, `free`, `uptime`, `uname`, `whoami`, `ls`, `cat`, `ps`, `ping`, `systemctl`)
+- File access restricted to configured allowed directories (`/home/bashman`, `/tmp`, `/home/bashman/Code`)
+- File reads capped at 1MB, tool content capped at 5KB
+- Default command timeout 30s, maximum 300s
+- Tools can be fully disabled via `config.yaml`
 
 ---
 
@@ -660,9 +669,13 @@ daisy/
 │
 ├── tools/
 │   ├── __init__.py
-│   ├── openclaw_bridge.py          # Subprocess interface to OpenClaw gateway
-│   ├── system_tools.py             # psutil, datetime, reminder scheduling
-│   └── tool_registry.py            # LLM function call schema definitions
+│   ├── tool_registry.py            # LLM function call schemas + handler builder
+│   ├── system_tools.py             # Time, system info, shell, reminders
+│   ├── web_tools.py                # Web search (DuckDuckGo) + URL browsing
+│   ├── file_tools.py               # Safe file read/write
+│   ├── background_tools.py         # Background task spawning
+│   ├── task_tracker.py             # Background task lifecycle management
+│   └── announcement_queue.py       # Proactive announcement queue
 │
 ├── api/
 │   ├── __init__.py
@@ -818,13 +831,16 @@ Deliverables:
 **Goal**: D.A.I.S.Y. can actually do things.
 
 Deliverables:
-- [ ] OpenClaw daemon running on Andromeda as separate service
-- [ ] `tools/openclaw_bridge.py` — subprocess interface to openclaw
-- [ ] `tools/system_tools.py` — system info, datetime, reminders
-- [ ] `tools/tool_registry.py` — LLM function call schemas
-- [ ] `llm/tool_dispatcher.py` — handles function call responses
-- [ ] Tool confirmation flow ("Just confirming, Boss")
-- [ ] Tool result injection back into conversation
+- [x] `tools/tool_registry.py` — LLM function call schemas + handler builder (13 tools)
+- [x] `tools/system_tools.py` — time, system info, sandboxed shell, reminders
+- [x] `tools/web_tools.py` — DuckDuckGo search + URL browsing via httpx + trafilatura
+- [x] `tools/file_tools.py` — path-validated safe file read/write
+- [x] `tools/background_tools.py` — background shell and OpenCode task spawning
+- [x] `tools/task_tracker.py` — background task lifecycle management (create, list, cancel, status)
+- [x] `tools/announcement_queue.py` — proactive announcement queue for reminders and task completion
+- [x] Tool result injection back into conversation stream (tool loop up to 5 rounds, then streaming response)
+
+**Note**: Original plan called for OpenClaw (a Node.js daemon) as the tool executor. After evaluation, OpenClaw was abandoned in favour of direct Python tool implementations. The integration complexity of a separate daemon with cross-process IPC was not justified for D.A.I.S.Y.'s well-defined tool set. All 13 tools are in-process async Python functions.
 
 **Success criterion**: "DAISY, what's the weather in Chennai?" → she searches → answers. "DAISY, what time is it?" → immediate answer. "DAISY, what's 2+2?" → answers without tool call (LLM knowledge).
 
@@ -879,7 +895,7 @@ Deliverables:
 ### Security
 - Tailscale-only access — no public internet exposure
 - No credentials stored in code — all in environment variables
-- OpenClaw sandboxed tool execution
+- Custom tool sandbox: command whitelist, path validation, file size caps, timeouts
 - File system access restricted to configured directories
 - No conversation data leaves Andromeda (LLM API sends text, not audio)
 

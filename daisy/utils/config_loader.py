@@ -80,6 +80,10 @@ class MemoryConfig(BaseModel):
     inject_facts: bool = True
     max_facts_to_inject: int = 15
 
+class ApiConfig(BaseModel):
+    host: str = "0.0.0.0"
+    port: int = 8443
+
 class Config(BaseModel):
     audio: AudioConfig = AudioConfig()
     vad: VADConfig = VADConfig()
@@ -90,6 +94,7 @@ class Config(BaseModel):
     wake_word: WakeWordConfig = WakeWordConfig()
     memory: MemoryConfig = MemoryConfig()
     tools: ToolsConfig = ToolsConfig()
+    api: ApiConfig = ApiConfig()
     mode: str = "wake_word"
 
 
