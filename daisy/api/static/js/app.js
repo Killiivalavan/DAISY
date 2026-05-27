@@ -5,6 +5,8 @@
  */
 
 import { DaisyOrb } from './orb.js';
+import { DaisyAudioPlayer } from './audio-player.js';
+import { VoiceSession } from './voice.js';
 
 // --- DOM references ---
 const textInput = document.getElementById('text-input');
@@ -33,6 +35,10 @@ const orbCanvas = document.getElementById('orb-canvas');
 if (orbCanvas) {
     orb = new DaisyOrb(orbCanvas);
 }
+
+// --- Audio ---
+const audioPlayer = new DaisyAudioPlayer();
+let voiceSession = null;
 
 // --- Chat toggle ---
 function toggleChat() {
@@ -194,9 +200,30 @@ textInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') sendText();
 });
 
-// --- Voice toggle (stub — Phase F8) ---
-voiceBtn.addEventListener('click', function () {
-    this.classList.toggle('active');
+// --- Voice toggle ---
+voiceBtn.addEventListener('click', async function () {
+    if (voiceSession && voiceSession.active) {
+        voiceSession.stop();
+        voiceBtn.classList.remove('active');
+        if (orb) orb.setAnalyser(null);
+        return;
+    }
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    voiceSession = new VoiceSession(
+        { send: (t, d) => ws.send(JSON.stringify({ type: t, ...d })),
+          sendBinary: (buf) => { if (ws.readyState === WebSocket.OPEN) ws.send(buf); } },
+        audioPlayer
+    );
+
+    try {
+        await voiceSession.start();
+        // Button turns active on voice_accepted message from server
+    } catch (err) {
+        console.error('Voice start failed:', err);
+        voiceSession = null;
+    }
 });
 
 // --- Panel content loaders ---
@@ -230,6 +257,7 @@ function connect() {
     const wsUrl = protocol + '//' + location.host + '/ws';
 
     ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
 
     ws.onopen = function () {
         if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
@@ -238,6 +266,16 @@ function connect() {
     };
 
     ws.onmessage = function (event) {
+        // Binary frame — TTS audio from server
+        if (event.data instanceof ArrayBuffer || event.data instanceof Uint8Array) {
+            const data = new Uint8Array(event.data);
+            if (data.length > 1 && data[0] === 0x01) {
+                const pcm = new Int16Array(data.buffer.slice(1));
+                audioPlayer.enqueue(pcm);
+            }
+            return;
+        }
+
         const msg = JSON.parse(event.data);
 
         switch (msg.type) {
@@ -269,7 +307,18 @@ function connect() {
                 renderSettings(msg.settings);
                 break;
             case 'text_accepted':
-                // Message was received by the server
+                break;
+            case 'voice_accepted':
+                voiceBtn.classList.add('active');
+                if (orb && audioPlayer) orb.setAnalyser(audioPlayer.getAnalyser());
+                break;
+            case 'voice_rejected':
+                voiceBtn.classList.remove('active');
+                if (voiceSession) { voiceSession.stop(); voiceSession = null; }
+                if (orb) orb.setAnalyser(null);
+                break;
+            case 'audio_clear':
+                audioPlayer.clear();
                 break;
             case 'error':
                 appendMessage('daisy', '⚠ ' + msg.message);
@@ -279,7 +328,9 @@ function connect() {
 
     ws.onclose = function () {
         setStatus('disconnected');
-        if (orb) orb.setState('disconnected');
+        if (orb) { orb.setState('disconnected'); orb.setAnalyser(null); }
+        if (voiceSession) { voiceSession.stop(); voiceSession = null; }
+        voiceBtn.classList.remove('active');
         if (connectingOverlay) connectingOverlay.classList.remove('fade-out');
         const delay = reconnectTimer ? 2000 : 1000;
         reconnectTimer = setTimeout(connect, delay);

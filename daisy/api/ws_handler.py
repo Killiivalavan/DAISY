@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 
+import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
@@ -19,15 +20,15 @@ def create_ws_handler(session_manager, event_bridge, state_machine):
 
         try:
             while True:
-                # Receive — could be JSON text or binary audio
                 message = await websocket.receive()
 
                 if "text" in message:
                     await _handle_json(
-                        websocket, json.loads(message["text"]), session, state_machine
+                        websocket, json.loads(message["text"]), session,
+                        state_machine, session_manager,
                     )
                 elif "bytes" in message:
-                    await _handle_binary(message["bytes"], session)
+                    _handle_binary(message["bytes"], session, session_manager)
                 else:
                     logger.debug(f"Unknown WS message type from {session.id}")
 
@@ -43,7 +44,7 @@ def create_ws_handler(session_manager, event_bridge, state_machine):
     return ws_endpoint
 
 
-async def _handle_json(websocket: WebSocket, msg: dict, session, state_machine):
+async def _handle_json(websocket, msg, session, state_machine, session_manager):
     """Dispatch JSON control messages."""
     msg_type = msg.get("type", "")
 
@@ -79,35 +80,41 @@ async def _handle_json(websocket: WebSocket, msg: dict, session, state_machine):
             },
         })
 
-    # Voice control — wired in Phase F8, stubs for now
     elif msg_type == "voice_start":
-        await websocket.send_json({"type": "voice_rejected", "reason": "not_implemented"})
+        accepted = await session_manager.activate_voice(session.id)
+        if accepted:
+            await websocket.send_json({"type": "voice_accepted"})
+        else:
+            await websocket.send_json({
+                "type": "voice_rejected", "reason": "session_not_found",
+            })
 
     elif msg_type == "voice_stop":
-        pass
+        await session_manager.deactivate_voice(session.id)
 
     elif msg_type == "mute_local":
-        pass
+        await session_manager.set_local_muted(True)
 
     elif msg_type == "unmute_local":
-        pass
+        await session_manager.set_local_muted(False)
 
     else:
         logger.debug(f"Unknown message type from {session.id}: {msg_type}")
 
 
-async def _handle_binary(data: bytes, session):
-    """Dispatch binary audio frames.
-
-    Full implementation in Phase F8 (Remote Voice).
-    For now, just acknowledge with a log line.
-    """
-    if len(data) == 0:
+def _handle_binary(data: bytes, session, session_manager):
+    """Dispatch binary audio frames."""
+    if len(data) <= 1:
         return
     marker = data[0]
+    pcm_bytes = data[1:]
+
     if marker == 0x00:
-        logger.debug(f"Mic audio from {session.id}: {len(data) - 1} bytes (ignored — voice not yet wired)")
+        samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
+        session_manager.route_mic_audio(session.id, samples)
+
     elif marker == 0x01:
         logger.debug(f"Unexpected TTS marker from client {session.id}")
+
     else:
         logger.debug(f"Unknown binary marker 0x{marker:02x} from {session.id}")

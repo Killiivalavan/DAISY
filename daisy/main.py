@@ -77,6 +77,9 @@ async def main():
         event_bridge=event_bridge,
     )
 
+    # Give session manager references for voice routing
+    session_manager.wire(state_machine, audio_source)
+
     await audio_source.start()
     await local_sink.start()
 
