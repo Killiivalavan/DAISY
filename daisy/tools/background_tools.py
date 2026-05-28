@@ -26,13 +26,13 @@ async def _run_shell_task(config, command: str) -> dict:
     }
 
 
-async def _run_sub_agent(config, llm, system_prompt: str, prompt: str) -> dict:
+async def _run_sub_agent(config, llm_router, system_prompt: str, prompt: str) -> dict:
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": prompt},
     ]
     result_parts = []
-    async for token in llm.stream_tokens(messages):
+    async for token in llm_router.stream_tokens("sub_agent", messages):
         result_parts.append(token)
     full_result = "".join(result_parts)
     return {"result": full_result}
@@ -69,7 +69,7 @@ async def _run_opencode(config, cmd: list) -> dict:
 
 
 async def spawn_task(
-    config, task_tracker, llm, task_type: str, description: str, payload: dict,
+    config, task_tracker, llm_router, task_type: str, description: str, payload: dict,
     notify_on_complete: bool = False,
 ) -> str:
     if task_type == "shell":
@@ -84,7 +84,7 @@ async def spawn_task(
             return "Error: 'prompt' required in payload for sub_agent task type."
         system_prompt = payload.get("system_prompt",
             "You are a helpful background worker AI. Complete the task thoroughly.")
-        coro = _run_sub_agent(config, llm, system_prompt, prompt)
+        coro = _run_sub_agent(config, llm_router, system_prompt, prompt)
 
     else:
         return f"Error: Unknown task type '{task_type}'. Supported: shell, sub_agent."

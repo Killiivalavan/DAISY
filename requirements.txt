@@ -19,6 +19,12 @@ trafilatura>=2.0.0
 httpx>=0.28.0
 psutil>=6.0.0
 
+# Anthropic Claude (optional — only if configured)
+# anthropic>=0.40.0
+
+# Google Gemini (optional — only if configured)
+# google-genai>=1.0.0
+
 # Development
 pytest>=9.0
 pytest-asyncio>=0.25

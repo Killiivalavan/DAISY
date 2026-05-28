@@ -15,14 +15,64 @@ stt:
   device: cpu
   compute_type: int8
 llm:
-  primary: groq
-  groq:
-    api_key_env: GROQ_API_KEY
-    model: llama-3.3-70b-versatile
-    temperature: 0.7
-    max_tokens: 1024
-    base_url: https://api.groq.com/openai/v1
+  providers:
+    groq:
+      type: openai_compatible
+      api_key_env: GROQ_API_KEY
+      base_url: https://api.groq.com/openai/v1
+      models:
+        default: meta-llama/llama-4-scout-17b-16e-instruct
+
+    openrouter:
+      type: openai_compatible
+      api_key_env: OPENROUTER_API_KEY
+      base_url: https://openrouter.ai/api/v1
+      models:
+        default: openrouter/free
+
+    gemini:
+      type: google
+      api_key_env: GEMINI_API_KEY
+      models:
+        default: gemini-2.5-flash
+
+    cerebras:
+      type: openai_compatible
+      api_key_env: CEREBRAS_API_KEY
+      base_url: https://api.cerebras.ai/v1
+      models:
+        fast: gpt-oss-120b
+        cheap: zai-glm-4.7
+
+  routing:
+    main_agent:
+      provider: groq
+      model: default
+      temperature: 0.7
+      max_tokens: 1024
+      fallback:
+        - provider: cerebras
+          model: fast
+    summarizer:
+      provider: gemini
+      model: default
+      temperature: 0.3
+      max_tokens: 256
+      fallback: []
+    sub_agent:
+      provider: openrouter
+      model: default
+      temperature: 0.5
+      max_tokens: 1024
+      fallback: []
+    announcement:
+      provider: groq
+      model: default
+      temperature: 0.7
+      max_tokens: 512
+      fallback: []
   system_prompt_path: SOUL.md
+
 tts:
   primary: kokoro
   kokoro:

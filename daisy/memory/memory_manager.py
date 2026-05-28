@@ -18,6 +18,20 @@ _REMEMBER_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Broader pattern: catches "save/note/keep in mind/don't forget", leading
+# words ("please", "also"), commas after the trigger word, and more copula
+# verbs ("equals", "means").
+_REMEMBER_BROAD = re.compile(
+    r"(?:please\s+|also\s+|and\s+|can\s+you\s+|could\s+you\s+)?"
+    r"(?:remember|save|note|keep\s+in\s+mind|don'?t\s+forget)"
+    r"(?:\s+(?:that|this|for\s+later|down))?[,\s:]+"
+    r"(?:that\s+)?(?:my\s+)?"
+    r"(.+?)"
+    r"\s+(?:is|are|was|were|equals|means)\s+"
+    r"(.+)",
+    re.IGNORECASE,
+)
+
 _REMEMBER_THIS = re.compile(r"remember\s+this", re.IGNORECASE)
 
 
@@ -37,7 +51,10 @@ class MemoryManager:
         if not text or not text.strip():
             return
 
+        # Try patterns in order: narrow, broad, then "remember this"
         m = _REMEMBER_PATTERN.search(text)
+        if not m:
+            m = _REMEMBER_BROAD.search(text)
         if m:
             key = m.group(1).strip()
             value = m.group(2).strip()
@@ -108,7 +125,7 @@ class MemoryManager:
                 "and precise. Lead with short, direct sentences."
             )
 
-    async def summarize_session(self, llm):
+    async def summarize_session(self, llm_router):
         context = self.buffer.get_context()
         if len(context) < 2:
             return
@@ -130,7 +147,7 @@ class MemoryManager:
 
         try:
             parts = []
-            async for token in llm.stream_tokens(summary_messages):
+            async for token in llm_router.stream_tokens("summarizer", summary_messages):
                 parts.append(token)
 
             summary = "".join(parts).strip()

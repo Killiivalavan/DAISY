@@ -15,7 +15,7 @@ from daisy.audio.input_stream import LocalAudioSource
 from daisy.audio.output_stream import LocalAudioSink
 from daisy.vad.silero_vad import SileroVAD
 from daisy.stt.faster_whisper_stt import FasterWhisperSTT
-from daisy.llm.groq_client import GroqClient
+from daisy.llm.router import LLMRouter
 from daisy.memory.memory_manager import MemoryManager
 from daisy.tts.kokoro_tts import KokoroTTS
 from daisy.tools.task_tracker import TaskTracker
@@ -29,7 +29,7 @@ from daisy.api.event_bridge import EventBridge
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', stream=sys.stderr)
 
 async def main():
-    load_dotenv()
+    load_dotenv(override=True)
     config = load_config("config.yaml")
     
     # --- Core Infrastructure ---
@@ -41,7 +41,7 @@ async def main():
     audio_sinks = [local_sink]
     vad = SileroVAD(config)
     stt = FasterWhisperSTT(config)
-    llm = GroqClient(config)
+    llm_router = LLMRouter(config.llm)
     tts = KokoroTTS(config)
     wake_word_detector = WakeWordDetector(config, event_bus)
 
@@ -51,7 +51,7 @@ async def main():
     # --- Tool System ---
     task_tracker = TaskTracker() if config.tools.enabled else None
     announcement_queue = AnnouncementQueue() if config.tools.enabled else None
-    tool_handlers = build_handlers(config, task_tracker, announcement_queue, llm) if config.tools.enabled else None
+    tool_handlers = build_handlers(config, task_tracker, announcement_queue, llm_router, memory_manager) if config.tools.enabled else None
     tool_schemas = TOOL_SCHEMAS if config.tools.enabled else None
 
     # --- API Layer (created before state machine so event bridge can be injected) ---
@@ -66,7 +66,7 @@ async def main():
         audio_sinks=audio_sinks,
         vad=vad,
         stt=stt,
-        llm=llm,
+        llm_router=llm_router,
         tts=tts,
         wake_word_detector=wake_word_detector,
         memory_manager=memory_manager,

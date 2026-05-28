@@ -23,7 +23,7 @@ class FakeLLM:
     def __init__(self, responses=None):
         self.responses = responses or ["Here is a summary of the conversation."]
 
-    async def stream_tokens(self, messages):
+    async def stream_tokens(self, role, messages):
         for r in self.responses:
             yield r
 
@@ -164,7 +164,7 @@ async def test_summarize_session_cancelled_gracefully(db_path):
     mgr.record_turn("assistant", "hi")
 
     class CancellingLLM:
-        async def stream_tokens(self, messages):
+        async def stream_tokens(self, role, messages):
             raise asyncio.CancelledError()
             yield  # pragma: no cover
 

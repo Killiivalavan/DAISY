@@ -4,6 +4,7 @@ import logging
 from statemachine import StateMachine, State
 
 from daisy.llm.sentence_splitter import SentenceSplitter
+from daisy.llm.client import ToolCall
 from daisy.tools.task_tracker import TaskTracker
 from daisy.tools.announcement_queue import AnnouncementQueue
 
@@ -54,7 +55,7 @@ class DaisyStateMachine(StateMachine):
     timed_out = listening.to(idle)
 
     def __init__(
-        self, config, event_bus, audio_source, audio_sinks, vad, stt, llm, tts,
+        self, config, event_bus, audio_source, audio_sinks, vad, stt, llm_router, tts,
         wake_word_detector, memory_manager,
         task_tracker=None, announcement_queue=None,
         tool_handlers=None, tool_schemas=None,
@@ -66,7 +67,7 @@ class DaisyStateMachine(StateMachine):
         self.audio_sinks = audio_sinks  # list[AudioSink] — local + remote clients
         self.vad = vad
         self.stt = stt
-        self.llm = llm
+        self.llm_router = llm_router
         self.tts = tts
         self.wake_word_detector = wake_word_detector
         self.memory_manager = memory_manager
@@ -197,7 +198,7 @@ class DaisyStateMachine(StateMachine):
             return
 
         self._summarize_task = asyncio.create_task(
-            self.memory_manager.summarize_session(self.llm)
+            self.memory_manager.summarize_session(self.llm_router)
         )
         if not self.wake_word_detector.is_listening:
             self.wake_word_detector.start(self.audio_source)
@@ -297,19 +298,19 @@ class DaisyStateMachine(StateMachine):
             tools = self.tool_schemas if self.tool_handlers else None
             tool_rounds = 0
             while tools and tool_rounds < 5:
-                response = await self.llm.complete(messages, tools=tools)
+                response = await self.llm_router.complete("main_agent", messages, tools=tools)
                 if not response.tool_calls:
                     break
 
                 for tool_call in response.tool_calls:
-                    func_name = tool_call.function.name
+                    func_name = tool_call.name
                     handler = self.tool_handlers.get(func_name)
                     if not handler:
                         logger.warning(f"[State] No handler for tool: {func_name}")
                         continue
 
                     try:
-                        args = json.loads(tool_call.function.arguments)
+                        args = json.loads(tool_call.arguments)
                         if args is None:
                             args = {}
                     except (json.JSONDecodeError, TypeError):
@@ -329,8 +330,8 @@ class DaisyStateMachine(StateMachine):
                                 "id": tc.id,
                                 "type": "function",
                                 "function": {
-                                    "name": tc.function.name,
-                                    "arguments": tc.function.arguments,
+                                    "name": tc.name,
+                                    "arguments": tc.arguments,
                                 },
                             }
                             for tc in response.tool_calls
@@ -352,7 +353,7 @@ class DaisyStateMachine(StateMachine):
             async def llm_worker():
                 full_response = []
                 try:
-                    async for token in self.llm.stream_tokens(messages):
+                    async for token in self.llm_router.stream_tokens("main_agent", messages):
                         full_response.append(token)
                         sentence = splitter.process_token(token)
                         if sentence:
@@ -411,7 +412,7 @@ class DaisyStateMachine(StateMachine):
             async def llm_worker():
                 full_response = []
                 try:
-                    async for token in self.llm.stream_tokens(messages):
+                    async for token in self.llm_router.stream_tokens("announcement", messages):
                         full_response.append(token)
                         sentence = splitter.process_token(token)
                         if sentence:

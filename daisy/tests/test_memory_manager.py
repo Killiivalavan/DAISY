@@ -299,7 +299,7 @@ async def test_summarize_session_single_message_returns_early(mm):
 @pytest.mark.asyncio
 async def test_summarize_session_with_llm_error_handled(mm):
     class FailingLLM:
-        async def stream_tokens(self, messages):
+        async def stream_tokens(self, role, messages):
             raise ConnectionError("API down")
             yield  # pragma: no cover
 

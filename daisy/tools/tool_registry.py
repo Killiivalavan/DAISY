@@ -114,7 +114,9 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Write content to a file. Only files in allowed directories can be written.",
+            "description": "Write content to a file. Only files in allowed directories can be written. "
+                           "Use this for documents, code, scripts, or other file artifacts. "
+                           "Do NOT use this for memories, notes about the user, or personal facts — use the remember tool instead.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -128,6 +130,33 @@ TOOL_SCHEMAS = [
                     },
                 },
                 "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember",
+            "description": "Store a fact in DAISY's persistent memory. "
+                           "Use this when the user asks you to remember, save, note down, "
+                           "or keep something for future reference.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Short label for the fact",
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "The information to remember",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category (e.g. 'preference', 'contact', 'project')",
+                    },
+                },
+                "required": ["key", "value"],
             },
         },
     },
@@ -234,7 +263,7 @@ TOOL_SCHEMAS = [
 ]
 
 
-def build_handlers(config, task_tracker, announcement_queue, llm):
+def build_handlers(config, task_tracker, announcement_queue, llm_router, memory_manager):
     return {
         "get_time_date": lambda: system_tools.get_time_date(),
         "get_system_info": lambda: system_tools.get_system_info(config),
@@ -246,9 +275,12 @@ def build_handlers(config, task_tracker, announcement_queue, llm):
         "browse_url": lambda url: web_tools.browse_url(url),
         "read_file": lambda path: file_tools.read_file(config, path),
         "write_file": lambda path, content: file_tools.write_file(config, path, content),
+        "remember": lambda key, value, category="general": (
+            _remember_fact(memory_manager, key, value, category)
+        ),
         "spawn_task": lambda task_type, description, payload, notify_on_complete=False: (
             background_tools.spawn_task(
-                config, task_tracker, llm, task_type, description, payload, notify_on_complete,
+                config, task_tracker, llm_router, task_type, description, payload, notify_on_complete,
             )
         ),
         "spawn_opencode_task": lambda prompt, project_dir=None, notify_on_complete=False: (
@@ -260,3 +292,8 @@ def build_handlers(config, task_tracker, announcement_queue, llm):
         "list_tasks": lambda: background_tools.list_tasks(task_tracker),
         "cancel_task": lambda task_id: background_tools.cancel_task(task_tracker, task_id),
     }
+
+
+async def _remember_fact(memory_manager, key: str, value: str, category: str = "general") -> str:
+    memory_manager.store.store_fact(key.lower(), value, category)
+    return f"Stored: {key}"

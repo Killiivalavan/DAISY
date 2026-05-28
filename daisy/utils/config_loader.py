@@ -27,17 +27,31 @@ class STTConfig(BaseModel):
     language: str = "en"
 
 
-class GroqConfig(BaseModel):
-    api_key_env: str = "GROQ_API_KEY"
-    model: str = "llama-3.3-70b-versatile"
+class ProviderModel(BaseModel):
+    type: str  # "openai_compatible" | "anthropic" | "google"
+    api_key_env: str
+    base_url: str | None = None
+    models: dict[str, str] = {}
+
+
+class RoutingEntry(BaseModel):
+    provider: str
+    model: str
     temperature: float = 0.7
     max_tokens: int = 1024
-    base_url: str = "https://api.groq.com/openai/v1"
+    fallback: list[dict] = []
+
+
+class LLMRouting(BaseModel):
+    main_agent: RoutingEntry | None = None
+    summarizer: RoutingEntry | None = None
+    sub_agent: RoutingEntry | None = None
+    announcement: RoutingEntry | None = None
 
 
 class LLMConfig(BaseModel):
-    primary: str = "groq"
-    groq: GroqConfig = GroqConfig()
+    providers: dict[str, ProviderModel] = {}
+    routing: LLMRouting = LLMRouting()
     system_prompt_path: str = "SOUL.md"
 
 
