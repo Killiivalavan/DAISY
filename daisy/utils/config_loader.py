@@ -78,6 +78,7 @@ class PipelineConfig(BaseModel):
 class OpenCodeConfig(BaseModel):
     enabled: bool = True
     project_root: str = "/home/bashman/Code"
+    model: str | None = None  # provider/model, e.g. "nvidia/deepseek-ai/deepseek-v4-pro"
 
 class ToolsConfig(BaseModel):
     enabled: bool = True

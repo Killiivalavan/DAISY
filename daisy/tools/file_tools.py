@@ -3,6 +3,10 @@ from pathlib import Path
 
 
 def _validate_path(path: str, allowed_directories: list[str]) -> Path:
+    if not path.startswith("/"):
+        raise PermissionError(
+            f"Path must be absolute (start with /). Got: {path}"
+        )
     resolved = Path(path).resolve()
     for allowed in allowed_directories:
         allowed_path = Path(allowed).resolve()

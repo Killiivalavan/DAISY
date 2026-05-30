@@ -172,6 +172,8 @@ function setStatus(state) {
 }
 
 // --- Transcript ---
+let activeDaisyMessage = null;
+
 function appendMessage(role, text) {
     const el = document.createElement('div');
     el.className = 'message message-' + role;
@@ -179,6 +181,21 @@ function appendMessage(role, text) {
     transcriptContainer.appendChild(el);
     const area = transcriptContainer.parentElement;
     if (area) area.scrollTop = area.scrollHeight;
+}
+
+function appendDaisyText(text) {
+    if (!activeDaisyMessage) {
+        activeDaisyMessage = document.createElement('div');
+        activeDaisyMessage.className = 'message message-daisy';
+        transcriptContainer.appendChild(activeDaisyMessage);
+    }
+    activeDaisyMessage.textContent += text;
+    const area = transcriptContainer.parentElement;
+    if (area) area.scrollTop = area.scrollHeight;
+}
+
+function finalizeDaisyMessage() {
+    activeDaisyMessage = null;
 }
 
 // --- Send text ---
@@ -282,15 +299,19 @@ function connect() {
             case 'state':
                 setStatus(msg.state);
                 if (orb) orb.setState(msg.state);
+                if (msg.state === 'idle' || msg.state === 'listening') {
+                    finalizeDaisyMessage();
+                }
                 break;
             case 'sentence':
-                appendMessage('daisy', msg.text);
+                appendDaisyText(msg.text);
                 if (orb) orb.onSentence();
                 break;
             case 'transcript':
                 // Full transcript display uses msg.text (final/partial fields)
                 break;
             case 'response_complete':
+                finalizeDaisyMessage();
                 break;
             case 'audio_amplitude':
                 if (orb && msg.envelope && msg.duration_s) {

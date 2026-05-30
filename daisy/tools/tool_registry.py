@@ -114,9 +114,10 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Write content to a file. Only files in allowed directories can be written. "
-                           "Use this for documents, code, scripts, or other file artifacts. "
-                           "Do NOT use this for memories, notes about the user, or personal facts — use the remember tool instead.",
+            "description": "Write a single file. For small changes, scripts, or documents. "
+                           "IMPORTANT: For multi-file projects, building apps, or any coding task "
+                           "that involves more than one file — use spawn_opencode_task instead. "
+                           "Do NOT use this for memories or personal facts — use the remember tool.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -184,8 +185,8 @@ TOOL_SCHEMAS = [
                         "description": "For shell: {'command': '...'}. For sub_agent: {'prompt': '...'}",
                     },
                     "notify_on_complete": {
-                        "type": "boolean",
-                        "description": "Set to true if the user asked to be notified when done",
+                        "type": "string",
+                        "description": "Set to 'true' if the user asked to be notified when done. Always pass as a string, not a boolean.",
                     },
                 },
                 "required": ["task_type", "description", "payload"],
@@ -196,8 +197,12 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "spawn_opencode_task",
-            "description": "Start a background OpenCode coding task. Use this for writing, fixing, or analyzing code. "
-                           "Give a detailed prompt. If the user says 'notify me', set notify_on_complete.",
+            "description": "Spawn an OpenCode agent to handle coding work in the BACKGROUND. "
+                           "ALWAYS use this when the user asks you to build, create, write, fix, "
+                           "or refactor a project — especially multi-file work. "
+                           "This runs asynchronously so you stay responsive to the user. "
+                           "Give OpenCode a detailed prompt describing every file and feature needed. "
+                           "Set notify_on_complete=true if the user wants to be told when finished.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -210,8 +215,8 @@ TOOL_SCHEMAS = [
                         "description": "Project directory (must be within allowed paths)",
                     },
                     "notify_on_complete": {
-                        "type": "boolean",
-                        "description": "Set to true if the user asked to be notified when done",
+                        "type": "string",
+                        "description": "Set to 'true' if the user asked to be notified when done. Always pass as a string, not a boolean.",
                     },
                 },
                 "required": ["prompt"],
@@ -278,14 +283,15 @@ def build_handlers(config, task_tracker, announcement_queue, llm_router, memory_
         "remember": lambda key, value, category="general": (
             _remember_fact(memory_manager, key, value, category)
         ),
-        "spawn_task": lambda task_type, description, payload, notify_on_complete=False: (
+        "spawn_task": lambda task_type, description, payload, notify_on_complete="false": (
             background_tools.spawn_task(
-                config, task_tracker, llm_router, task_type, description, payload, notify_on_complete,
+                config, task_tracker, llm_router, task_type, description, payload,
+                notify_on_complete in (True, "true", "True", "yes", "1"),
             )
         ),
-        "spawn_opencode_task": lambda prompt, project_dir=None, notify_on_complete=False: (
+        "spawn_opencode_task": lambda prompt, project_dir=None, notify_on_complete="false": (
             background_tools.spawn_opencode_task(
-                config, task_tracker, prompt, project_dir, notify_on_complete,
+                config, task_tracker, prompt, project_dir, notify_on_complete in (True, "true", "True", "yes", "1"),
             )
         ),
         "get_task_status": lambda task_id: background_tools.get_task_status(task_tracker, task_id),

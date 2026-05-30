@@ -14,7 +14,7 @@ class SentenceSplitter:
             self._buffer = ""
             return sentence
 
-        match = re.search(r"[.!?;](?:\s|$)", self._buffer)
+        match = re.search(r"[.!?](?=\s)", self._buffer)
         if match:
             split_point = match.end()
             sentence = self._buffer[:split_point].strip()

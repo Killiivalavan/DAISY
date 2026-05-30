@@ -114,7 +114,9 @@ async def spawn_opencode_task(
     else:
         project_dir = project_root
 
-    cmd = ["opencode", "-p", prompt, "-f", "json", "-q", "-c", project_dir]
+    cmd = ["opencode", "run", "--dangerously-skip-permissions", prompt, "-c", project_dir]
+    if config.tools.opencode.model:
+        cmd.extend(["-m", config.tools.opencode.model])
 
     description = f"OpenCode: {prompt[:80]}"
     task_id = await task_tracker.create_task(

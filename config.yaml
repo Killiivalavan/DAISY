@@ -28,7 +28,7 @@ llm:
       api_key_env: OPENROUTER_API_KEY
       base_url: https://openrouter.ai/api/v1
       models:
-        default: openrouter/free
+        default: deepseek/deepseek-v4-flash:free
 
     gemini:
       type: google
@@ -60,8 +60,8 @@ llm:
       max_tokens: 256
       fallback: []
     sub_agent:
-      provider: openrouter
-      model: default
+      provider: cerebras
+      model: cheap
       temperature: 0.5
       max_tokens: 1024
       fallback: []
@@ -116,3 +116,4 @@ tools:
   opencode:
     enabled: true
     project_root: /home/bashman/Code
+    model:
