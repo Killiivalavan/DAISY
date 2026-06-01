@@ -7,6 +7,8 @@ import logging
 import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
+from daisy.utils.config_loader import serialize_config_for_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,8 +25,14 @@ def create_ws_handler(session_manager, event_bridge, state_machine):
                 message = await websocket.receive()
 
                 if "text" in message:
+                    try:
+                        msg_data = json.loads(message["text"])
+                    except json.JSONDecodeError:
+                        logger.warning(f"Malformed JSON from client {session.id}")
+                        await websocket.send_json({"type": "error", "message": "Malformed JSON"})
+                        continue
                     await _handle_json(
-                        websocket, json.loads(message["text"]), session,
+                        websocket, msg_data, session,
                         state_machine, session_manager,
                     )
                 elif "bytes" in message:
@@ -59,25 +67,13 @@ async def _handle_json(websocket, msg, session, state_machine, session_manager):
         await websocket.send_json({"type": "history", "turns": turns})
 
     elif msg_type == "get_memory":
-        facts = state_machine.memory_manager.store.get_all_facts()
+        facts = await state_machine.memory_manager.store.get_all_facts()
         await websocket.send_json({"type": "memory", "facts": facts})
 
     elif msg_type == "get_config":
-        c = state_machine.config
         await websocket.send_json({
             "type": "config",
-            "settings": {
-                "mode": c.mode,
-                "vad": {
-                    "silero_threshold": c.vad.silero_threshold,
-                    "speech_start_frames": c.vad.speech_start_frames,
-                    "speech_end_frames": c.vad.speech_end_frames,
-                },
-                "tts": {"voice": c.tts.kokoro.voice},
-                "memory": {"max_turns": c.memory.max_turns},
-                "tools": {"enabled": c.tools.enabled},
-                "wake_word": {"threshold": c.wake_word.threshold},
-            },
+            "settings": serialize_config_for_client(state_machine.config),
         })
 
     elif msg_type == "voice_start":
@@ -110,7 +106,11 @@ def _handle_binary(data: bytes, session, session_manager):
     pcm_bytes = data[1:]
 
     if marker == 0x00:
-        samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
+        try:
+            samples = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Malformed PCM data from client {session.id}: {e}")
+            return
         session_manager.route_mic_audio(session.id, samples)
 
     elif marker == 0x01:

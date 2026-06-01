@@ -13,8 +13,8 @@ class AudioConfig(BaseModel):
 
 
 class VADConfig(BaseModel):
-    speech_start_frames: int = 8
-    speech_end_frames: int = 20
+    speech_start_frames: int = 4
+    speech_end_frames: int = 25
     max_recording_seconds: int = 15
     startup_ignore_ms: int = 500
     silero_threshold: float = 0.5
@@ -69,7 +69,7 @@ class TTSConfig(BaseModel):
 
 class WakeWordConfig(BaseModel):
     model: str = "models/daisy.onnx"
-    threshold: float = 0.5
+    threshold: float = 0.4
 
 class PipelineConfig(BaseModel):
     listening_timeout: int = 10
@@ -79,10 +79,11 @@ class OpenCodeConfig(BaseModel):
     enabled: bool = True
     project_root: str = "/home/bashman/Code"
     model: str | None = None  # provider/model, e.g. "nvidia/deepseek-ai/deepseek-v4-pro"
+    skip_permissions: bool = False
 
 class ToolsConfig(BaseModel):
     enabled: bool = True
-    allowed_directories: list[str] = ["/home/bashman", "/tmp"]
+    allowed_directories: list[str] = ["/home/bashman/Code", "/home/bashman/Downloads"]
     file_max_size_bytes: int = 1048576
     allowed_commands: list[str] = ["df", "free", "uptime", "uname", "whoami", "ls", "cat", "ps", "ping", "systemctl"]
     default_timeout: int = 30
@@ -98,6 +99,7 @@ class MemoryConfig(BaseModel):
 class ApiConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8443
+    auth_token: str = ""  # empty = no authentication required (dev mode)
 
 class Config(BaseModel):
     audio: AudioConfig = AudioConfig()
@@ -122,3 +124,19 @@ def load_config(path: str = "config.yaml") -> Config:
         raw = yaml.safe_load(f)
 
     return Config(**raw) if raw else Config()
+
+
+def serialize_config_for_client(config: Config) -> dict:
+    """Return the subset of config settings that the client needs."""
+    return {
+        "mode": config.mode,
+        "vad": {
+            "silero_threshold": config.vad.silero_threshold,
+            "speech_start_frames": config.vad.speech_start_frames,
+            "speech_end_frames": config.vad.speech_end_frames,
+        },
+        "tts": {"voice": config.tts.kokoro.voice},
+        "memory": {"max_turns": config.memory.max_turns},
+        "tools": {"enabled": config.tools.enabled},
+        "wake_word": {"threshold": config.wake_word.threshold},
+    }

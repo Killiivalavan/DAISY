@@ -3,6 +3,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
+from daisy.utils.config_loader import serialize_config_for_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,30 +38,19 @@ def create_router(state_machine, memory_manager, config, session_manager) -> API
 
     @router.get("/memory")
     async def get_memory():
-        facts = memory_manager.store.get_all_facts()
+        facts = await memory_manager.store.get_all_facts()
         return {"facts": facts}
 
     @router.delete("/memory/{key}")
     async def delete_fact(key: str):
-        deleted = memory_manager.store.delete_fact(key)
+        deleted = await memory_manager.store.delete_fact(key)
         if not deleted:
             raise HTTPException(status_code=404, detail="fact not found")
         return {"deleted": True}
 
     @router.get("/config")
     async def get_config():
-        return {
-            "mode": config.mode,
-            "vad": {
-                "silero_threshold": config.vad.silero_threshold,
-                "speech_start_frames": config.vad.speech_start_frames,
-                "speech_end_frames": config.vad.speech_end_frames,
-            },
-            "tts": {"voice": config.tts.kokoro.voice},
-            "memory": {"max_turns": config.memory.max_turns},
-            "tools": {"enabled": config.tools.enabled},
-            "wake_word": {"threshold": config.wake_word.threshold},
-        }
+        return serialize_config_for_client(config)
 
     @router.patch("/config")
     async def update_config(body: dict):

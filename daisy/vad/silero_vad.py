@@ -1,8 +1,12 @@
 import asyncio
+import logging
+import sys
 import time
 import numpy as np
 import torch
 from silero_vad import load_silero_vad
+
+logger = logging.getLogger(__name__)
 
 
 class SileroVAD:
@@ -78,13 +82,13 @@ class SileroVAD:
             if not hasattr(self, '_log_counter'): self._log_counter = 0
             self._log_counter += 1
             if self._log_counter % 20 == 0:
-                print(f"  [VAD Debug] Vol: {rms:.3f} | Prob: {prob:.3f} | Speaking: {is_speaking}", file=__import__("sys").stderr)
+                logger.debug(f"  [VAD Debug] Vol: {rms:.3f} | Prob: {prob:.3f} | Speaking: {is_speaking}")
             # --------------------------
 
             if not is_speaking:
                 # Timeout check: If we haven't started speaking and the timer expires
                 if timeout is not None and (time.monotonic() - listen_start) > timeout:
-                    print("  [VAD] Listening timed out.", file=__import__("sys").stderr)
+                    logger.info("  [VAD] Listening timed out.")
                     return None
 
                 ring_buffer.append(frame)
@@ -109,9 +113,9 @@ class SileroVAD:
                         # Remove trailing silence frames
                         if silence_frames <= len(buffer):
                             buffer = buffer[:-silence_frames]
-                        print(f"  [VAD Debug] Reached {silence_frames} silence frames, returning audio.", file=__import__("sys").stderr)
+                        logger.debug(f"  [VAD Debug] Reached {silence_frames} silence frames, returning audio.")
                         return np.concatenate(buffer)
 
                 if time.monotonic() - recording_start > self.max_recording_seconds:
-                    print(f"  [VAD Debug] Reached max recording seconds, returning audio.", file=__import__("sys").stderr)
+                    logger.debug(f"  [VAD Debug] Reached max recording seconds, returning audio.")
                     return np.concatenate(buffer)

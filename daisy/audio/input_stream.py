@@ -37,7 +37,10 @@ class LocalAudioSource(AudioSource):
         self._stream = None
 
     def _callback(self, indata, frames, time, status):
-        self._loop.call_soon_threadsafe(self._queue.put_nowait, indata.copy())
+        try:
+            self._loop.call_soon_threadsafe(self._queue.put_nowait, indata.copy())
+        except asyncio.QueueFull:
+            pass  # drop chunk; consumer is falling behind
 
     async def start(self):
         while not self._queue.empty():

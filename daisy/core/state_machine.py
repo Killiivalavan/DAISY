@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import sys
 from statemachine import StateMachine, State
 
 from daisy.llm.sentence_splitter import SentenceSplitter
@@ -135,7 +136,7 @@ class DaisyStateMachine(StateMachine):
         })
 
     async def shutdown(self):
-        self.memory_manager.end_session()
+        await self.memory_manager.end_session()
         for name in ("_speaking_task", "_processing_task", "_listening_task", "_llm_task", "_summarize_task"):
             task = getattr(self, name, None)
             if task is not None and not task.done():
@@ -219,7 +220,7 @@ class DaisyStateMachine(StateMachine):
 
         response = getattr(self, '_last_response', None)
         if response:
-            self.memory_manager.record_turn("assistant", response)
+            await self.memory_manager.record_turn("assistant", response)
             self._last_response = None
 
         if self.announcement_queue and self.announcement_queue.has_pending:
@@ -227,7 +228,7 @@ class DaisyStateMachine(StateMachine):
             asyncio.create_task(self._safe_timed_out())
             return
 
-        print("  [system] *beep* (Mic is hot)", file=__import__("sys").stderr)
+        logger.info("  [system] *beep* (Mic is hot)")
 
         self._listening_task = asyncio.create_task(self._do_listen())
 
@@ -289,10 +290,10 @@ class DaisyStateMachine(StateMachine):
                 asyncio.create_task(self._event_bridge.broadcast_transcript(text))
 
             if self.current_audio_buffer is not None:
-                print(f"You: {text}")
+                logger.info(f"You: {text}")
 
-            self.memory_manager.record_turn("user", text)
-            messages = self.memory_manager.build_context(text)
+            await self.memory_manager.record_turn("user", text)
+            messages = await self.memory_manager.build_context(text)
 
             # Phase 1: Tool detection loop (non-streaming)
             tools = self.tool_schemas if self.tool_handlers else None
@@ -301,6 +302,24 @@ class DaisyStateMachine(StateMachine):
                 response = await self.llm_router.complete("main_agent", messages, tools=tools)
                 if not response.tool_calls:
                     break
+
+                # Append assistant message with all tool_calls once per round
+                assistant_msg = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.name,
+                                "arguments": tc.arguments,
+                            },
+                        }
+                        for tc in response.tool_calls
+                    ],
+                }
+                messages.append(assistant_msg)
 
                 for tool_call in response.tool_calls:
                     func_name = tool_call.name
@@ -317,27 +336,11 @@ class DaisyStateMachine(StateMachine):
                         args = {}
 
                     logger.info(f"[State] Tool call: {func_name}({args})")
-                    print(f"  [Tool] {func_name}({args})", file=__import__("sys").stderr)
+                    logger.info(f"  [Tool] {func_name}({args})")
 
                     result = await handler(**args)
                     logger.info(f"[State] Tool result: {str(result)[:200]}")
 
-                    assistant_msg = {
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [
-                            {
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": tc.name,
-                                    "arguments": tc.arguments,
-                                },
-                            }
-                            for tc in response.tool_calls
-                        ],
-                    }
-                    messages.append(assistant_msg)
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
@@ -347,40 +350,7 @@ class DaisyStateMachine(StateMachine):
                 tool_rounds += 1
 
             # Phase 2: Stream final response
-            self.sentence_queue = asyncio.Queue()
-            splitter = SentenceSplitter()
-
-            async def llm_worker():
-                full_response = []
-                try:
-                    async for token in self.llm_router.stream_tokens("main_agent", messages):
-                        full_response.append(token)
-                        sentence = splitter.process_token(token)
-                        if sentence:
-                            await self.sentence_queue.put(sentence)
-                            if self._event_bridge:
-                                await self._event_bridge.broadcast_sentence(sentence)
-                    remaining = splitter.flush()
-                    if remaining:
-                        await self.sentence_queue.put(remaining)
-                        if self._event_bridge:
-                            await self._event_bridge.broadcast_sentence(remaining)
-                except Exception as e:
-                    logger.error(f"LLM Worker error: {e}")
-                    if self._event_bridge:
-                        asyncio.create_task(
-                            self._event_bridge.broadcast_error(f"LLM error: {e}")
-                        )
-                finally:
-                    await self.sentence_queue.put(None)
-                    self._last_response = "".join(full_response)
-                    if self._event_bridge and self._last_response:
-                        asyncio.create_task(
-                            self._event_bridge.broadcast_response_complete(self._last_response)
-                        )
-
-            self._llm_task = asyncio.create_task(llm_worker())
-
+            self._start_llm_stream("main_agent", messages)
             asyncio.create_task(self._safe_response_ready())
 
         except asyncio.CancelledError:
@@ -403,42 +373,10 @@ class DaisyStateMachine(StateMachine):
                 f"with you, so greet them naturally. Here is the information: {summary}"
             )
 
-            self.memory_manager.record_turn("user", f"[system notification: {summary}]")
-            messages = self.memory_manager.build_context(prompt)
+            await self.memory_manager.record_turn("user", f"[system notification: {summary}]")
+            messages = await self.memory_manager.build_context(prompt)
 
-            self.sentence_queue = asyncio.Queue()
-            splitter = SentenceSplitter()
-
-            async def llm_worker():
-                full_response = []
-                try:
-                    async for token in self.llm_router.stream_tokens("announcement", messages):
-                        full_response.append(token)
-                        sentence = splitter.process_token(token)
-                        if sentence:
-                            await self.sentence_queue.put(sentence)
-                            if self._event_bridge:
-                                await self._event_bridge.broadcast_sentence(sentence)
-                    remaining = splitter.flush()
-                    if remaining:
-                        await self.sentence_queue.put(remaining)
-                        if self._event_bridge:
-                            await self._event_bridge.broadcast_sentence(remaining)
-                except Exception as e:
-                    logger.error(f"Announce LLM Worker error: {e}")
-                    if self._event_bridge:
-                        asyncio.create_task(
-                            self._event_bridge.broadcast_error(f"LLM error: {e}")
-                        )
-                finally:
-                    await self.sentence_queue.put(None)
-                    self._last_response = "".join(full_response)
-                    if self._event_bridge and self._last_response:
-                        asyncio.create_task(
-                            self._event_bridge.broadcast_response_complete(self._last_response)
-                        )
-
-            self._llm_task = asyncio.create_task(llm_worker())
+            self._start_llm_stream("announcement", messages)
             asyncio.create_task(self._safe_response_ready())
 
         except asyncio.CancelledError:
@@ -446,6 +384,48 @@ class DaisyStateMachine(StateMachine):
         except Exception as e:
             logger.error(f"[State] Error in ANNOUNCE: {e}")
             asyncio.create_task(self._safe_turn_complete())
+
+    def _start_llm_stream(self, role: str, messages: list[dict]):
+        """Stream LLM tokens through a SentenceSplitter, broadcasting sentences
+        via the event bridge and pushing them onto the sentence queue.
+
+        The llm_worker coroutine is spawned as a background task stored in
+        ``self._llm_task``.  Sentence queue is stored in ``self.sentence_queue``.
+        """
+        self.sentence_queue = asyncio.Queue()
+        splitter = SentenceSplitter()
+        log_tag = f"{role.title()} Worker"
+
+        async def llm_worker():
+            full_response = []
+            try:
+                async for token in self.llm_router.stream_tokens(role, messages):
+                    full_response.append(token)
+                    sentence = splitter.process_token(token)
+                    if sentence:
+                        await self.sentence_queue.put(sentence)
+                        if self._event_bridge:
+                            await self._event_bridge.broadcast_sentence(sentence)
+                remaining = splitter.flush()
+                if remaining:
+                    await self.sentence_queue.put(remaining)
+                    if self._event_bridge:
+                        await self._event_bridge.broadcast_sentence(remaining)
+            except Exception as e:
+                logger.error(f"{log_tag} error: {e}")
+                if self._event_bridge:
+                    asyncio.create_task(
+                        self._event_bridge.broadcast_error(f"LLM error: {e}")
+                    )
+            finally:
+                await self.sentence_queue.put(None)
+                self._last_response = "".join(full_response)
+                if self._event_bridge and self._last_response:
+                    asyncio.create_task(
+                        self._event_bridge.broadcast_response_complete(self._last_response)
+                    )
+
+        self._llm_task = asyncio.create_task(llm_worker())
 
     # --- SPEAKING STATE ---
     async def on_enter_speaking(self):

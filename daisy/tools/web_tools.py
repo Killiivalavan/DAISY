@@ -1,8 +1,22 @@
 import asyncio
+import ipaddress
+from urllib.parse import urlparse
 
 import httpx
 from ddgs import DDGS
 from trafilatura import extract
+
+# IP ranges that browse_url must not fetch
+_SSRF_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),       # loopback
+    ipaddress.ip_network("10.0.0.0/8"),        # private
+    ipaddress.ip_network("172.16.0.0/12"),     # private
+    ipaddress.ip_network("192.168.0.0/16"),    # private
+    ipaddress.ip_network("169.254.0.0/16"),    # link-local / cloud metadata
+    ipaddress.ip_network("::1/128"),           # loopback v6
+    ipaddress.ip_network("fc00::/7"),          # unique local v6
+    ipaddress.ip_network("fe80::/10"),         # link-local v6
+]
 
 
 async def web_search(query: str, max_results: int = 5) -> str:
@@ -25,9 +39,29 @@ async def web_search(query: str, max_results: int = 5) -> str:
     return "\n\n".join(lines)
 
 
+def _is_ssrf_safe(url: str) -> bool:
+    """Return True if the URL's host does not resolve to a blocked IP range."""
+    hostname = urlparse(url).hostname
+    if not hostname:
+        return False
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        # Not a raw IP — resolve it (sync; fine for a tool call)
+        import socket
+        try:
+            ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+        except (socket.gaierror, ValueError):
+            return False
+    return not any(ip in net for net in _SSRF_BLOCKED_NETWORKS)
+
+
 async def browse_url(url: str) -> str:
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
+
+    if not _is_ssrf_safe(url):
+        return "Error: Requests to internal/private hosts are not allowed."
 
     async with httpx.AsyncClient(
         timeout=15.0,

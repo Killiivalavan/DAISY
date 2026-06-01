@@ -293,7 +293,13 @@ function connect() {
             return;
         }
 
-        const msg = JSON.parse(event.data);
+        let msg;
+        try {
+            msg = JSON.parse(event.data);
+        } catch (e) {
+            console.warn('Malformed JSON from server, ignoring frame:', e.message);
+            return;
+        }
 
         switch (msg.type) {
             case 'state':

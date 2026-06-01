@@ -301,5 +301,5 @@ def build_handlers(config, task_tracker, announcement_queue, llm_router, memory_
 
 
 async def _remember_fact(memory_manager, key: str, value: str, category: str = "general") -> str:
-    memory_manager.store.store_fact(key.lower(), value, category)
+    await memory_manager.store.store_fact(key.lower(), value, category)
     return f"Stored: {key}"

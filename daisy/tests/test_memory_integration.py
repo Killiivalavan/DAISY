@@ -40,12 +40,13 @@ def _make_mgr(db_path):
     return MemoryManager(cfg)
 
 
-def test_full_conversation_turn(db_path):
+@pytest.mark.asyncio
+async def test_full_conversation_turn(db_path):
     mgr = _make_mgr(db_path)
 
-    mgr.record_turn("user", "hello")
-    mgr.record_turn("assistant", "hi boss")
-    ctx = mgr.build_context("whats the weather")
+    await mgr.record_turn("user", "hello")
+    await mgr.record_turn("assistant", "hi boss")
+    ctx = await mgr.build_context("whats the weather")
 
     assert len(ctx) >= 3
     assert ctx[0]["role"] == "system"
@@ -53,14 +54,15 @@ def test_full_conversation_turn(db_path):
     assert mgr.buffer.message_count == 2
 
 
-def test_remember_command_across_turns(db_path):
+@pytest.mark.asyncio
+async def test_remember_command_across_turns(db_path):
     mgr = _make_mgr(db_path)
 
-    mgr.record_turn("user", "remember my name is John")
-    mgr.record_turn("assistant", "got it boss")
-    mgr.record_turn("user", "what is my name")
+    await mgr.record_turn("user", "remember my name is John")
+    await mgr.record_turn("assistant", "got it boss")
+    await mgr.record_turn("user", "what is my name")
 
-    ctx = mgr.build_context("what is my name")
+    ctx = await mgr.build_context("what is my name")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     fact_block = [b for b in system_blocks if "Known facts" in b]
 
@@ -68,69 +70,74 @@ def test_remember_command_across_turns(db_path):
     assert "name: John" in fact_block[0]
 
 
-def test_multiple_remember_commands(db_path):
+@pytest.mark.asyncio
+async def test_multiple_remember_commands(db_path):
     mgr = _make_mgr(db_path)
 
-    mgr.record_turn("user", "remember my name is John")
-    mgr.record_turn("user", "remember my project is DAISY")
-    mgr.record_turn("user", "remember my favorite color is blue")
+    await mgr.record_turn("user", "remember my name is John")
+    await mgr.record_turn("user", "remember my project is DAISY")
+    await mgr.record_turn("user", "remember my favorite color is blue")
 
-    facts = mgr.store.get_all_facts()
+    facts = await mgr.store.get_all_facts()
     assert len(facts) == 3
 
 
-def test_remember_this_stores_previous_exchange(db_path):
+@pytest.mark.asyncio
+async def test_remember_this_stores_previous_exchange(db_path):
     mgr = _make_mgr(db_path)
 
-    mgr.record_turn("user", "I love the new voice feature")
-    mgr.record_turn("assistant", "im glad you like it boss")
-    mgr.record_turn("user", "remember this")
+    await mgr.record_turn("user", "I love the new voice feature")
+    await mgr.record_turn("assistant", "im glad you like it boss")
+    await mgr.record_turn("user", "remember this")
 
-    facts = mgr.store.get_all_facts()
+    facts = await mgr.store.get_all_facts()
     assert len(facts) == 1
     assert facts[0]["category"] == "saved_conversation"
     assert facts[0]["key"] == "i love the new voice feature"
 
 
-def test_session_persistence_across_restart(db_path):
+@pytest.mark.asyncio
+async def test_session_persistence_across_restart(db_path):
     mgr1 = _make_mgr(db_path)
-    mgr1.record_turn("user", "remember my name is John")
-    mgr1.store.end_session(mgr1._session_id, "Discussed names")
+    await mgr1.record_turn("user", "remember my name is John")
+    await mgr1.store.end_session(mgr1._session_id, "Discussed names")
     mgr1.buffer.clear()
     mgr1.store.close()
 
     mgr2 = _make_mgr(db_path)
-    fact = mgr2.store.get_fact("name")
+    fact = await mgr2.store.get_fact("name")
     assert fact is not None
     assert fact["value"] == "John"
 
-    summary = mgr2.store.get_last_session_summary()
+    summary = await mgr2.store.get_last_session_summary()
     assert summary == "Discussed names"
     mgr2.store.close()
 
 
-def test_conversation_buffer_stays_within_limit(db_path):
+@pytest.mark.asyncio
+async def test_conversation_buffer_stays_within_limit(db_path):
     cfg = FakeConfig()
     cfg.memory.max_turns = 2
     cfg.memory.db_path = db_path
     mgr = MemoryManager(cfg)
 
     for i in range(6):
-        mgr.record_turn("user", f"msg{i}")
-        mgr.record_turn("assistant", f"resp{i}")
+        await mgr.record_turn("user", f"msg{i}")
+        await mgr.record_turn("assistant", f"resp{i}")
 
     assert mgr.buffer.message_count <= 4
 
 
-def test_facts_injected_across_sessions(db_path):
+@pytest.mark.asyncio
+async def test_facts_injected_across_sessions(db_path):
     mgr1 = _make_mgr(db_path)
-    mgr1.record_turn("user", "remember my pet is a dog")
-    mgr1.store.end_session(mgr1._session_id, "Talked about pets")
+    await mgr1.record_turn("user", "remember my pet is a dog")
+    await mgr1.store.end_session(mgr1._session_id, "Talked about pets")
     mgr1.store.close()
 
     mgr2 = _make_mgr(db_path)
-    mgr2.record_turn("user", "what pet do i have")
-    ctx = mgr2.build_context("what pet do i have")
+    await mgr2.record_turn("user", "what pet do i have")
+    ctx = await mgr2.build_context("what pet do i have")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
 
     fact_block = [b for b in system_blocks if "Known facts" in b]
@@ -146,13 +153,13 @@ def test_facts_injected_across_sessions(db_path):
 @pytest.mark.asyncio
 async def test_summarize_session_stores_summary(db_path):
     mgr = _make_mgr(db_path)
-    mgr.record_turn("user", "hello")
-    mgr.record_turn("assistant", "hi boss")
-    mgr.record_turn("user", "whats the weather")
-    mgr.record_turn("assistant", "its sunny")
+    await mgr.record_turn("user", "hello")
+    await mgr.record_turn("assistant", "hi boss")
+    await mgr.record_turn("user", "whats the weather")
+    await mgr.record_turn("assistant", "its sunny")
 
     await mgr.summarize_session(FakeLLM())
-    summary = mgr.store.get_last_session_summary()
+    summary = await mgr.store.get_last_session_summary()
     assert summary is not None
     assert len(summary) > 0
 
@@ -160,8 +167,8 @@ async def test_summarize_session_stores_summary(db_path):
 @pytest.mark.asyncio
 async def test_summarize_session_cancelled_gracefully(db_path):
     mgr = _make_mgr(db_path)
-    mgr.record_turn("user", "hello")
-    mgr.record_turn("assistant", "hi")
+    await mgr.record_turn("user", "hello")
+    await mgr.record_turn("assistant", "hi")
 
     class CancellingLLM:
         async def stream_tokens(self, role, messages):
@@ -172,15 +179,16 @@ async def test_summarize_session_cancelled_gracefully(db_path):
         await mgr.summarize_session(CancellingLLM())
 
 
-def test_build_context_structure(db_path):
+@pytest.mark.asyncio
+async def test_build_context_structure(db_path):
     mgr = _make_mgr(db_path)
-    mgr.store.store_fact("name", "John")
-    mgr.record_turn("user", "first")
-    mgr.record_turn("assistant", "first response")
-    mgr.store.end_session(mgr._session_id, "Previous chat")
-    mgr._session_id = mgr.store.start_session()
+    await mgr.store.store_fact("name", "John")
+    await mgr.record_turn("user", "first")
+    await mgr.record_turn("assistant", "first response")
+    await mgr.store.end_session(mgr._session_id, "Previous chat")
+    mgr._session_id = await mgr.store.start_session()
 
-    ctx = mgr.build_context("current")
+    ctx = await mgr.build_context("current")
     roles = [m["role"] for m in ctx]
 
     assert roles[0] == "system"
@@ -190,9 +198,10 @@ def test_build_context_structure(db_path):
     assert ctx[-1] == {"role": "user", "content": "current"}
 
 
-def test_memory_manager_end_session_cleans_up(db_path):
+@pytest.mark.asyncio
+async def test_memory_manager_end_session_cleans_up(db_path):
     mgr = _make_mgr(db_path)
-    mgr.record_turn("user", "hello")
-    mgr.record_turn("assistant", "hi")
-    mgr.end_session()
+    await mgr.record_turn("user", "hello")
+    await mgr.record_turn("assistant", "hi")
+    await mgr.end_session()
     assert mgr.buffer.message_count == 0

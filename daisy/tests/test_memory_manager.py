@@ -21,264 +21,298 @@ def mm(tmp_path):
     return MemoryManager(cfg)
 
 
-def test_record_turn_adds_to_buffer(mm):
-    mm.record_turn("user", "hello")
+@pytest.mark.asyncio
+async def test_record_turn_adds_to_buffer(mm):
+    await mm.record_turn("user", "hello")
     assert mm.buffer.message_count == 1
 
 
-def test_record_turn_remember_command_stores_fact(mm):
-    mm.record_turn("user", "remember my name is John")
-    fact = mm.store.get_fact("name")
+@pytest.mark.asyncio
+async def test_record_turn_remember_command_stores_fact(mm):
+    await mm.record_turn("user", "remember my name is John")
+    fact = await mm.store.get_fact("name")
     assert fact is not None
     assert fact["value"] == "John"
 
 
-def test_record_turn_remember_with_that(mm):
-    mm.record_turn("user", "remember that my project is DAISY")
-    fact = mm.store.get_fact("project")
+@pytest.mark.asyncio
+async def test_record_turn_remember_with_that(mm):
+    await mm.record_turn("user", "remember that my project is DAISY")
+    fact = await mm.store.get_fact("project")
     assert fact is not None
     assert fact["value"] == "DAISY"
 
 
-def test_record_turn_remember_without_my(mm):
-    mm.record_turn("user", "remember the API key is sk-123")
-    fact = mm.store.get_fact("the API key")
+@pytest.mark.asyncio
+async def test_record_turn_remember_without_my(mm):
+    await mm.record_turn("user", "remember the API key is sk-123")
+    fact = await mm.store.get_fact("the API key")
     assert fact is not None
     assert fact["value"] == "sk-123"
 
 
-def test_record_turn_remember_with_was(mm):
-    mm.record_turn("user", "remember that the weather was sunny")
-    fact = mm.store.get_fact("the weather")
+@pytest.mark.asyncio
+async def test_record_turn_remember_with_was(mm):
+    await mm.record_turn("user", "remember that the weather was sunny")
+    fact = await mm.store.get_fact("the weather")
     assert fact is not None
     assert fact["value"] == "sunny"
 
 
-def test_record_turn_remember_with_were(mm):
-    mm.record_turn("user", "remember that my keys were on the table")
-    fact = mm.store.get_fact("keys")
+@pytest.mark.asyncio
+async def test_record_turn_remember_with_were(mm):
+    await mm.record_turn("user", "remember that my keys were on the table")
+    fact = await mm.store.get_fact("keys")
     assert fact is not None
     assert fact["value"] == "on the table"
 
 
-def test_record_turn_remember_with_are(mm):
-    mm.record_turn("user", "remember that my hobbies are coding")
-    fact = mm.store.get_fact("hobbies")
+@pytest.mark.asyncio
+async def test_record_turn_remember_with_are(mm):
+    await mm.record_turn("user", "remember that my hobbies are coding")
+    fact = await mm.store.get_fact("hobbies")
     assert fact is not None
     assert fact["value"] == "coding"
 
 
-def test_record_turn_remember_uppercase(mm):
-    mm.record_turn("user", "REMEMBER MY NAME IS JOHN")
-    fact = mm.store.get_fact("name")
+@pytest.mark.asyncio
+async def test_record_turn_remember_uppercase(mm):
+    await mm.record_turn("user", "REMEMBER MY NAME IS JOHN")
+    fact = await mm.store.get_fact("name")
     assert fact is not None
     assert fact["value"] == "JOHN"
 
 
-def test_record_turn_remember_case_insensitive_verb(mm):
-    mm.record_turn("user", "Remember That My Favorite Color IS Blue")
-    fact = mm.store.get_fact("favorite color")
+@pytest.mark.asyncio
+async def test_record_turn_remember_case_insensitive_verb(mm):
+    await mm.record_turn("user", "Remember That My Favorite Color IS Blue")
+    fact = await mm.store.get_fact("favorite color")
     assert fact is not None
     assert fact["value"] == "Blue"
 
 
-def test_record_turn_remember_this_stores_conversation(mm):
-    mm.record_turn("user", "hello")
-    mm.record_turn("assistant", "hi there boss")
-    mm.record_turn("user", "remember this")
-    facts = mm.store.get_all_facts()
+@pytest.mark.asyncio
+async def test_record_turn_remember_this_stores_conversation(mm):
+    await mm.record_turn("user", "hello")
+    await mm.record_turn("assistant", "hi there boss")
+    await mm.record_turn("user", "remember this")
+    facts = await mm.store.get_all_facts()
     assert len(facts) == 1
     assert facts[0]["category"] == "saved_conversation"
     assert "hi there boss" in facts[0]["value"]
 
 
-def test_record_turn_remember_this_no_assistant_yet(mm):
-    mm.record_turn("user", "remember this")
-    assert mm.store.get_all_facts() == []
+@pytest.mark.asyncio
+async def test_record_turn_remember_this_no_assistant_yet(mm):
+    await mm.record_turn("user", "remember this")
+    assert await mm.store.get_all_facts() == []
 
 
-def test_record_turn_remember_this_buffer_too_small(mm):
-    mm.record_turn("user", "only one message")
-    mm.record_turn("user", "remember this")
-    assert mm.store.get_all_facts() == []
+@pytest.mark.asyncio
+async def test_record_turn_remember_this_buffer_too_small(mm):
+    await mm.record_turn("user", "only one message")
+    await mm.record_turn("user", "remember this")
+    assert await mm.store.get_all_facts() == []
 
 
-def test_record_turn_content_none_does_not_crash(mm):
-    mm.record_turn("user", None)
+@pytest.mark.asyncio
+async def test_record_turn_content_none_does_not_crash(mm):
+    await mm.record_turn("user", None)
     assert mm.buffer.message_count == 1
 
 
-def test_record_turn_empty_content_does_not_remember(mm):
-    mm.record_turn("user", "")
-    assert mm.store.get_all_facts() == []
+@pytest.mark.asyncio
+async def test_record_turn_empty_content_does_not_remember(mm):
+    await mm.record_turn("user", "")
+    assert await mm.store.get_all_facts() == []
 
 
-def test_record_turn_assistant_does_not_trigger_remember(mm):
-    mm.record_turn("assistant", "remember my name is John")
-    assert mm.store.get_all_facts() == []
+@pytest.mark.asyncio
+async def test_record_turn_assistant_does_not_trigger_remember(mm):
+    await mm.record_turn("assistant", "remember my name is John")
+    assert await mm.store.get_all_facts() == []
 
 
-def test_remember_does_not_match_normal_speech(mm):
-    mm.record_turn("user", "I remember when we built this")
-    assert mm.store.get_all_facts() == []
+@pytest.mark.asyncio
+async def test_remember_does_not_match_normal_speech(mm):
+    await mm.record_turn("user", "I remember when we built this")
+    assert await mm.store.get_all_facts() == []
 
 
-def test_remember_empty_key_after_strip_not_stored(mm):
-    mm.record_turn("user", "remember   is   ")
-    assert mm.store.get_all_facts() == []
+@pytest.mark.asyncio
+async def test_remember_empty_key_after_strip_not_stored(mm):
+    await mm.record_turn("user", "remember   is   ")
+    assert await mm.store.get_all_facts() == []
 
 
-def test_remember_empty_value_not_stored(mm):
-    mm.record_turn("user", "remember key is   ")
-    assert mm.store.get_all_facts() == []
+@pytest.mark.asyncio
+async def test_remember_empty_value_not_stored(mm):
+    await mm.record_turn("user", "remember key is   ")
+    assert await mm.store.get_all_facts() == []
 
 
-def test_remember_this_key_truncated_at_80(mm):
+@pytest.mark.asyncio
+async def test_remember_this_key_truncated_at_80(mm):
     long_key = "x" * 100
-    mm.record_turn("user", long_key)
-    mm.record_turn("assistant", "response")
-    mm.record_turn("user", "remember this")
-    facts = mm.store.get_all_facts()
+    await mm.record_turn("user", long_key)
+    await mm.record_turn("assistant", "response")
+    await mm.record_turn("user", "remember this")
+    facts = await mm.store.get_all_facts()
     assert len(facts[0]["key"]) == 80
 
 
-def test_remember_this_value_truncated_at_200(mm):
-    mm.record_turn("user", "hi")
+@pytest.mark.asyncio
+async def test_remember_this_value_truncated_at_200(mm):
+    await mm.record_turn("user", "hi")
     long_val = "x" * 300
-    mm.record_turn("assistant", long_val)
-    mm.record_turn("user", "remember this")
-    facts = mm.store.get_all_facts()
+    await mm.record_turn("assistant", long_val)
+    await mm.record_turn("user", "remember this")
+    facts = await mm.store.get_all_facts()
     assert len(facts[0]["value"]) == 200
 
 
-def test_build_context_starts_with_system(mm):
-    mm.record_turn("user", "hello")
-    ctx = mm.build_context("hello")
+@pytest.mark.asyncio
+async def test_build_context_starts_with_system(mm):
+    await mm.record_turn("user", "hello")
+    ctx = await mm.build_context("hello")
     assert ctx[0]["role"] == "system"
     assert "Boss" in ctx[0]["content"] or "D.A.I.S.Y." in ctx[0]["content"]
 
 
-def test_build_context_includes_user_message(mm):
-    ctx = mm.build_context("test message")
+@pytest.mark.asyncio
+async def test_build_context_includes_user_message(mm):
+    ctx = await mm.build_context("test message")
     assert ctx[-1] == {"role": "user", "content": "test message"}
 
 
-def test_build_context_includes_history(mm):
-    mm.record_turn("user", "first")
-    mm.record_turn("assistant", "first response")
-    ctx = mm.build_context("second")
+@pytest.mark.asyncio
+async def test_build_context_includes_history(mm):
+    await mm.record_turn("user", "first")
+    await mm.record_turn("assistant", "first response")
+    ctx = await mm.build_context("second")
     contents = [m["content"] for m in ctx]
     assert "first" in contents
     assert "first response" in contents
 
 
-def test_build_context_injects_facts(mm):
-    mm.store.store_fact("name", "John")
-    ctx = mm.build_context("hello")
+@pytest.mark.asyncio
+async def test_build_context_injects_facts(mm):
+    await mm.store.store_fact("name", "John")
+    ctx = await mm.build_context("hello")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     fact_block = [b for b in system_blocks if "Known facts" in b]
     assert len(fact_block) == 1
     assert "name: John" in fact_block[0]
 
 
-def test_build_context_injects_session_summary(mm):
-    mm.store.end_session(1, "Previous chat about weather")
-    ctx = mm.build_context("hello")
+@pytest.mark.asyncio
+async def test_build_context_injects_session_summary(mm):
+    await mm.store.end_session(1, "Previous chat about weather")
+    ctx = await mm.build_context("hello")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     summary_block = [b for b in system_blocks if "Previous session" in b]
     assert len(summary_block) == 1
     assert "weather" in summary_block[0]
 
 
-def test_build_context_facts_and_summary_both_injected(mm):
-    mm.store.store_fact("name", "John")
-    mm.store.end_session(1, "Previous chat")
-    ctx = mm.build_context("hello")
+@pytest.mark.asyncio
+async def test_build_context_facts_and_summary_both_injected(mm):
+    await mm.store.store_fact("name", "John")
+    await mm.store.end_session(1, "Previous chat")
+    ctx = await mm.build_context("hello")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     assert any("Known facts" in b for b in system_blocks)
     assert any("Previous session" in b for b in system_blocks)
 
 
-def test_build_context_inject_facts_disabled(mm):
+@pytest.mark.asyncio
+async def test_build_context_inject_facts_disabled(mm):
     mm._config.inject_facts = False
-    mm.store.store_fact("name", "John")
-    ctx = mm.build_context("hello")
+    await mm.store.store_fact("name", "John")
+    ctx = await mm.build_context("hello")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     fact_block = [b for b in system_blocks if "Known facts" in b]
     assert len(fact_block) == 0
 
 
-def test_build_context_max_facts_zero(mm):
+@pytest.mark.asyncio
+async def test_build_context_max_facts_zero(mm):
     mm._config.max_facts_to_inject = 0
-    mm.store.store_fact("name", "John")
-    ctx = mm.build_context("hello")
+    await mm.store.store_fact("name", "John")
+    ctx = await mm.build_context("hello")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     fact_block = [b for b in system_blocks if "Known facts" in b]
     assert len(fact_block) == 0
 
 
-def test_build_context_max_facts_negative(mm):
+@pytest.mark.asyncio
+async def test_build_context_max_facts_negative(mm):
     mm._config.max_facts_to_inject = -1
-    mm.store.store_fact("name", "John")
-    ctx = mm.build_context("hello")
+    await mm.store.store_fact("name", "John")
+    ctx = await mm.build_context("hello")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     fact_block = [b for b in system_blocks if "Known facts" in b]
     assert len(fact_block) == 0
 
 
-def test_build_context_no_facts_stored(mm):
-    ctx = mm.build_context("hello")
+@pytest.mark.asyncio
+async def test_build_context_no_facts_stored(mm):
+    ctx = await mm.build_context("hello")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     fact_block = [b for b in system_blocks if "Known facts" in b]
     assert len(fact_block) == 0
 
 
-def test_build_context_no_session_summary(mm):
-    ctx = mm.build_context("hello")
+@pytest.mark.asyncio
+async def test_build_context_no_session_summary(mm):
+    ctx = await mm.build_context("hello")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     summary_block = [b for b in system_blocks if "Previous session" in b]
     assert len(summary_block) == 0
 
 
-def test_build_context_empty_user_message(mm):
-    ctx = mm.build_context("")
+@pytest.mark.asyncio
+async def test_build_context_empty_user_message(mm):
+    ctx = await mm.build_context("")
     assert ctx[-1]["content"] == ""
 
 
-def test_build_context_custom_category_prefix(mm):
-    mm.store.store_fact("project", "DAISY", category="work")
-    ctx = mm.build_context("hello")
+@pytest.mark.asyncio
+async def test_build_context_custom_category_prefix(mm):
+    await mm.store.store_fact("project", "DAISY", category="work")
+    ctx = await mm.build_context("hello")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     fact_block = [b for b in system_blocks if "Known facts" in b]
     assert "[work] project: DAISY" in fact_block[0]
 
 
-def test_end_session_clears_buffer(mm):
-    mm.record_turn("user", "hello")
-    mm.record_turn("assistant", "hi")
-    mm.end_session()
+@pytest.mark.asyncio
+async def test_end_session_clears_buffer(mm):
+    await mm.record_turn("user", "hello")
+    await mm.record_turn("assistant", "hi")
+    await mm.end_session()
     assert mm.buffer.message_count == 0
 
 
-def test_end_session_clear_when_empty(mm):
-    mm.end_session()
+@pytest.mark.asyncio
+async def test_end_session_clear_when_empty(mm):
+    await mm.end_session()
     assert mm.buffer.message_count == 0
 
 
-def test_end_session_called_twice(mm):
-    mm.record_turn("user", "hi")
-    mm.record_turn("assistant", "hello")
-    mm.end_session()
-    mm.end_session()
+@pytest.mark.asyncio
+async def test_end_session_called_twice(mm):
+    await mm.record_turn("user", "hi")
+    await mm.record_turn("assistant", "hello")
+    await mm.end_session()
+    await mm.end_session()
     assert mm.buffer.message_count == 0
 
 
-def test_system_prompt_fallback_when_file_missing(mm, monkeypatch):
-    for path in list(mm._load_system_prompt.__globals__.values()):
-        pass
-    from pathlib import Path
-    non_existent = Path("/tmp/nonexistent_dir_xyz/SOUL.md")
-    prompt = mm._load_system_prompt()
+@pytest.mark.asyncio
+async def test_system_prompt_fallback_when_file_missing(mm):
+    import asyncio
+    prompt = await mm._load_system_prompt()
     assert "Andromeda" in prompt
     assert "Boss" in prompt
 
@@ -291,7 +325,7 @@ async def test_summarize_session_early_return_on_empty_buffer(mm):
 
 @pytest.mark.asyncio
 async def test_summarize_session_single_message_returns_early(mm):
-    mm.record_turn("user", "hello")
+    await mm.record_turn("user", "hello")
     await mm.summarize_session(None)
     assert True
 
@@ -303,24 +337,25 @@ async def test_summarize_session_with_llm_error_handled(mm):
             raise ConnectionError("API down")
             yield  # pragma: no cover
 
-    mm.record_turn("user", "hello")
-    mm.record_turn("assistant", "hi")
+    await mm.record_turn("user", "hello")
+    await mm.record_turn("assistant", "hi")
     await mm.summarize_session(FailingLLM())
     assert True
 
 
-def test_build_context_respects_order():
+@pytest.mark.asyncio
+async def test_build_context_respects_order():
     from pathlib import Path
     import tempfile
     cfg = FakeConfig()
     with tempfile.TemporaryDirectory() as tmp:
         cfg.memory.db_path = str(Path(tmp) / "m.db")
         mgr = MemoryManager(cfg)
-        mgr.store.store_fact("name", "John")
-        mgr.record_turn("user", "first msg")
-        mgr.record_turn("assistant", "first resp")
-        mgr.store.end_session(1, "Summary text")
-        ctx = mgr.build_context("current msg")
+        await mgr.store.store_fact("name", "John")
+        await mgr.record_turn("user", "first msg")
+        await mgr.record_turn("assistant", "first resp")
+        await mgr.store.end_session(1, "Summary text")
+        ctx = await mgr.build_context("current msg")
         roles = [m["role"] for m in ctx]
         contents = [m["content"] for m in ctx]
         system_idx = [i for i, r in enumerate(roles) if r == "system"]

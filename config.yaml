@@ -96,9 +96,8 @@ api:
 tools:
   enabled: true
   allowed_directories:
-  - /home/bashman
-  - /tmp
   - /home/bashman/Code
+  - /home/bashman/Downloads
   file_max_size_bytes: 1048576
   allowed_commands:
   - df
@@ -117,3 +116,4 @@ tools:
     enabled: true
     project_root: /home/bashman/Code
     model:
+    skip_permissions: true

@@ -5,8 +5,19 @@ from pathlib import Path
 
 
 async def _run_shell_task(config, command: str) -> dict:
-    proc = await asyncio.create_subprocess_shell(
-        command,
+    """Run a shell command, applying the allowlist from config."""
+    import shlex
+    from daisy.tools.system_tools import _command_allowed
+
+    allowed = config.tools.allowed_commands
+    if not _command_allowed(command, allowed):
+        return {
+            "error": f"Command not allowed. Allowed: {', '.join(allowed)}",
+            "returncode": -1,
+        }
+
+    proc = await asyncio.create_subprocess_exec(
+        *shlex.split(command),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -114,7 +125,10 @@ async def spawn_opencode_task(
     else:
         project_dir = project_root
 
-    cmd = ["opencode", "run", "--dangerously-skip-permissions", prompt, "-c", project_dir]
+    cmd = ["opencode", "run"]
+    if config.tools.opencode.skip_permissions:
+        cmd.append("--dangerously-skip-permissions")
+    cmd.extend([prompt, "-c", project_dir])
     if config.tools.opencode.model:
         cmd.extend(["-m", config.tools.opencode.model])
 

@@ -5,6 +5,8 @@ import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from daisy.utils.config_loader import load_config
@@ -96,14 +98,14 @@ async def main():
     shutdown_event = asyncio.Event()
 
     def signal_handler():
-        print("\nShutting down...", file=sys.stderr)
+        logger.info("Shutting down...")
         shutdown_event.set()
 
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, signal_handler)
 
-    print("D.A.I.S.Y. v2 ready.", file=sys.stderr)
+    logger.info("D.A.I.S.Y. v2 ready.")
 
     # Wire event bridge to state machine callbacks
     state_machine.set_state_change_callback(event_bridge.on_state_enter)
@@ -132,7 +134,7 @@ async def main():
         for sink in audio_sinks:
             sink.stop()
         await audio_source.stop()
-        print("D.A.I.S.Y. stopped.", file=sys.stderr)
+        logger.info("D.A.I.S.Y. stopped.")
 
 
 if __name__ == "__main__":

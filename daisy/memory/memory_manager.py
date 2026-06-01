@@ -40,14 +40,15 @@ class MemoryManager:
         self.buffer = ConversationBuffer(config.memory.max_turns)
         self.store = SQLiteStore(config.memory.db_path)
         self._config = config.memory
-        self._session_id = self.store.start_session()
+        # Use sync internal method during init (asyncio event loop not running yet)
+        self._session_id = self.store._start_session_sync()
 
-    def record_turn(self, role: str, content: str):
+    async def record_turn(self, role: str, content: str):
         self.buffer.add(role, content)
         if role == "user" and content:
-            self._parse_remember_command(content)
+            await self._parse_remember_command(content)
 
-    def _parse_remember_command(self, text: str):
+    async def _parse_remember_command(self, text: str):
         if not text or not text.strip():
             return
 
@@ -59,7 +60,7 @@ class MemoryManager:
             key = m.group(1).strip()
             value = m.group(2).strip()
             if key and value:
-                self.store.store_fact(key.lower(), value)
+                await self.store.store_fact(key.lower(), value)
                 logger.info(f"[Memory] Stored fact: {key} = {value}")
             return
 
@@ -78,18 +79,18 @@ class MemoryManager:
             if last_assistant and last_user:
                 key = (last_user[:80] if len(last_user) > 80 else last_user)
                 value = (last_assistant[:200] if len(last_assistant) > 200 else last_assistant)
-                self.store.store_fact(key, value, category="saved_conversation")
+                await self.store.store_fact(key, value, category="saved_conversation")
                 logger.info(f"[Memory] Stored conversation snippet: {key}...")
 
-    def build_context(self, user_message: str) -> list[dict]:
-        messages = [{"role": "system", "content": self._load_system_prompt()}]
+    async def build_context(self, user_message: str) -> list[dict]:
+        messages = [{"role": "system", "content": await self._load_system_prompt()}]
 
         if self._config.inject_facts:
             limit = max(self._config.max_facts_to_inject, 0)
-            facts = self.store.get_all_facts()[:limit]
+            facts = await self.store.get_all_facts(limit=limit)
             if facts:
                 fact_lines = []
-                for f in facts:
+                for f in facts[:limit]:
                     label = f"{f['key']}: {f['value']}"
                     if f["category"] != "general":
                         label = f"[{f['category']}] {label}"
@@ -101,7 +102,7 @@ class MemoryManager:
                     }
                 )
 
-        last_summary = self.store.get_last_session_summary()
+        last_summary = await self.store.get_last_session_summary()
         if last_summary:
             messages.append(
                 {
@@ -114,10 +115,10 @@ class MemoryManager:
         messages.append({"role": "user", "content": user_message})
         return messages
 
-    def _load_system_prompt(self) -> str:
+    async def _load_system_prompt(self) -> str:
         path = Path("SOUL.md")
         try:
-            return path.read_text(encoding="utf-8").strip()
+            return (await asyncio.to_thread(path.read_text, encoding="utf-8")).strip()
         except FileNotFoundError:
             return (
                 "You are D.A.I.S.Y., a personal AI assistant running on a server "
@@ -152,7 +153,7 @@ class MemoryManager:
 
             summary = "".join(parts).strip()
             if summary:
-                self.store.end_session(self._session_id, summary)
+                await self.store.end_session(self._session_id, summary)
                 logger.info(f"[Memory] Session summary stored: {summary[:80]}...")
         except asyncio.CancelledError:
             logger.debug("[Memory] Summarization cancelled (user spoke again)")
@@ -160,6 +161,6 @@ class MemoryManager:
         except Exception as e:
             logger.error(f"[Memory] Summarization failed: {e}")
 
-    def end_session(self, summary: str | None = None):
-        self.store.end_session(self._session_id, summary)
+    async def end_session(self, summary: str | None = None):
+        await self.store.end_session(self._session_id, summary)
         self.buffer.clear()

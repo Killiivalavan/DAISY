@@ -43,8 +43,8 @@ async def run_command(config, command: str) -> str:
             f"Allowed commands: {', '.join(allowed)}"
         )
 
-    proc = await asyncio.create_subprocess_shell(
-        command,
+    proc = await asyncio.create_subprocess_exec(
+        *shlex.split(command),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
