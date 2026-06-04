@@ -85,7 +85,7 @@ class ToolsConfig(BaseModel):
     enabled: bool = True
     allowed_directories: list[str] = ["/home/bashman/Code", "/home/bashman/Downloads"]
     file_max_size_bytes: int = 1048576
-    allowed_commands: list[str] = ["df", "free", "uptime", "uname", "whoami", "ls", "cat", "ps", "ping", "systemctl"]
+    allowed_commands: list[str] = ["df", "free", "uptime", "uname", "whoami", "ls", "cat", "ps", "ping", "systemctl", "grep", "find", "git", "wc", "head", "tail", "sort", "du", "file"]
     default_timeout: int = 30
     max_timeout: int = 300
     opencode: OpenCodeConfig = OpenCodeConfig()

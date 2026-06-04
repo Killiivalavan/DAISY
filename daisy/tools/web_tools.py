@@ -82,4 +82,4 @@ async def browse_url(url: str) -> str:
     if not text:
         return "Could not extract meaningful content from this URL."
 
-    return text[:3000]
+    return text[:8000]

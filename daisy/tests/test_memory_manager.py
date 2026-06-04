@@ -198,7 +198,7 @@ async def test_build_context_includes_history(mm):
 @pytest.mark.asyncio
 async def test_build_context_injects_facts(mm):
     await mm.store.store_fact("name", "John")
-    ctx = await mm.build_context("hello")
+    ctx = await mm.build_context("what is my name")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     fact_block = [b for b in system_blocks if "Known facts" in b]
     assert len(fact_block) == 1
@@ -219,7 +219,7 @@ async def test_build_context_injects_session_summary(mm):
 async def test_build_context_facts_and_summary_both_injected(mm):
     await mm.store.store_fact("name", "John")
     await mm.store.end_session(1, "Previous chat")
-    ctx = await mm.build_context("hello")
+    ctx = await mm.build_context("what is my name")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     assert any("Known facts" in b for b in system_blocks)
     assert any("Previous session" in b for b in system_blocks)
@@ -280,7 +280,7 @@ async def test_build_context_empty_user_message(mm):
 @pytest.mark.asyncio
 async def test_build_context_custom_category_prefix(mm):
     await mm.store.store_fact("project", "DAISY", category="work")
-    ctx = await mm.build_context("hello")
+    ctx = await mm.build_context("tell me about my project")
     system_blocks = [m["content"] for m in ctx if m["role"] == "system"]
     fact_block = [b for b in system_blocks if "Known facts" in b]
     assert "[work] project: DAISY" in fact_block[0]
@@ -355,12 +355,12 @@ async def test_build_context_respects_order():
         await mgr.record_turn("user", "first msg")
         await mgr.record_turn("assistant", "first resp")
         await mgr.store.end_session(1, "Summary text")
-        ctx = await mgr.build_context("current msg")
+        ctx = await mgr.build_context("what is my name")
         roles = [m["role"] for m in ctx]
         contents = [m["content"] for m in ctx]
         system_idx = [i for i, r in enumerate(roles) if r == "system"]
         assert len(system_idx) == 3
         assert "Known facts" in contents[system_idx[1]]
         assert "Previous session" in contents[system_idx[2]]
-        user_msg = [c for c in contents if c == "current msg"]
-        assert len(user_msg) == 1
+        # The user message should be present as the last content
+        assert ctx[-1] == {"role": "user", "content": "what is my name"}

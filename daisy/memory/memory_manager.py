@@ -87,29 +87,40 @@ class MemoryManager:
 
         if self._config.inject_facts:
             limit = max(self._config.max_facts_to_inject, 0)
-            facts = await self.store.get_all_facts(limit=limit)
+            facts = await self.store.get_all_facts(limit=200)  # fetch pool, filter below
             if facts:
+                # Simple keyword overlap: only inject facts relevant to the current message
+                msg_words = set(user_message.lower().split())
                 fact_lines = []
-                for f in facts[:limit]:
-                    label = f"{f['key']}: {f['value']}"
-                    if f["category"] != "general":
-                        label = f"[{f['category']}] {label}"
-                    fact_lines.append(label)
+                for f in facts:
+                    fact_text = f"{f['key']} {f['value']} {f['category']}".lower()
+                    if any(w in fact_text for w in msg_words if len(w) > 2):
+                        label = f"{f['key']}: {f['value']}"
+                        if f["category"] != "general":
+                            label = f"[{f['category']}] {label}"
+                        fact_lines.append(label)
+                    if len(fact_lines) >= limit:
+                        break
+                if fact_lines:
+                    messages.append(
+                        {
+                            "role": "system",
+                            "content": "Known facts:\n" + "\n".join(fact_lines),
+                        }
+                    )
+
+        # Inject up to 3 previous session summaries for multi-session continuity
+        summaries = await self.store.get_last_session_summaries(limit=3)
+        if summaries:
+            labels = ["Previous session", "Two sessions ago", "Three sessions ago"]
+            for i, summary in enumerate(summaries):
+                label = labels[i] if i < len(labels) else f"{i + 1} sessions ago"
                 messages.append(
                     {
                         "role": "system",
-                        "content": "Known facts:\n" + "\n".join(fact_lines),
+                        "content": f"{label}: {summary}",
                     }
                 )
-
-        last_summary = await self.store.get_last_session_summary()
-        if last_summary:
-            messages.append(
-                {
-                    "role": "system",
-                    "content": f"Previous session: {last_summary}",
-                }
-            )
 
         messages.extend(self.buffer.get_context())
         messages.append({"role": "user", "content": user_message})

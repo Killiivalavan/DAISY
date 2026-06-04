@@ -146,16 +146,21 @@ class SQLiteStore:
                 )
             self._conn.commit()
 
-    async def get_last_session_summary(self) -> Optional[str]:
-        return await asyncio.to_thread(self._get_last_session_summary_sync)
+    async def get_last_session_summaries(self, limit: int = 3) -> list[str]:
+        return await asyncio.to_thread(self._get_last_session_summaries_sync, limit)
 
-    def _get_last_session_summary_sync(self) -> Optional[str]:
+    def _get_last_session_summaries_sync(self, limit: int) -> list[str]:
         with self._lock:
-            row = self._conn.execute(
+            rows = self._conn.execute(
                 "SELECT summary FROM sessions WHERE summary IS NOT NULL "
-                "ORDER BY ended_at DESC, id DESC LIMIT 1"
-            ).fetchone()
-        return row["summary"] if row else None
+                "ORDER BY ended_at DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [r["summary"] for r in rows]
+
+    async def get_last_session_summary(self) -> Optional[str]:
+        summaries = await self.get_last_session_summaries(limit=1)
+        return summaries[0] if summaries else None
 
     def close(self):
         self._conn.close()

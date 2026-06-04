@@ -60,7 +60,7 @@ async def run_command(config, command: str) -> str:
     output = (stdout or b"").decode(errors="replace").strip()
     error = (stderr or b"").decode(errors="replace").strip()
     result = output or error or "(no output)"
-    return result[:2000]
+    return result[:8000]
 
 
 async def set_reminder(config, announcement_queue, duration_seconds: int, message: str) -> str:

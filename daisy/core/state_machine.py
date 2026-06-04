@@ -298,7 +298,7 @@ class DaisyStateMachine(StateMachine):
             # Phase 1: Tool detection loop (non-streaming)
             tools = self.tool_schemas if self.tool_handlers else None
             tool_rounds = 0
-            while tools and tool_rounds < 5:
+            while tools and tool_rounds < 10:
                 response = await self.llm_router.complete("main_agent", messages, tools=tools)
                 if not response.tool_calls:
                     break
@@ -326,6 +326,11 @@ class DaisyStateMachine(StateMachine):
                     handler = self.tool_handlers.get(func_name)
                     if not handler:
                         logger.warning(f"[State] No handler for tool: {func_name}")
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": f"Error: no handler registered for tool '{func_name}'. Available: {list(self.tool_handlers.keys())}",
+                        })
                         continue
 
                     try:
@@ -333,7 +338,16 @@ class DaisyStateMachine(StateMachine):
                         if args is None:
                             args = {}
                     except (json.JSONDecodeError, TypeError):
-                        args = {}
+                        args = None
+
+                    if args is None:
+                        logger.warning(f"[State] Failed to parse args for {func_name}: {tool_call.arguments}")
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": f"Error: failed to parse arguments for '{func_name}'. Raw args: {tool_call.arguments[:500]}",
+                        })
+                        continue
 
                     logger.info(f"[State] Tool call: {func_name}({args})")
                     logger.info(f"  [Tool] {func_name}({args})")
@@ -344,7 +358,7 @@ class DaisyStateMachine(StateMachine):
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": str(result)[:2000],
+                        "content": str(result)[:8000],
                     })
 
                 tool_rounds += 1

@@ -40,7 +40,7 @@ async def read_file(config, path: str) -> str:
     if not content.strip():
         return "(empty file)"
 
-    return content[:5000]
+    return content[:8000]
 
 
 async def write_file(config, path: str, content: str) -> str:

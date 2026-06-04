@@ -31,7 +31,7 @@ async def _run_shell_task(config, command: str) -> dict:
         return {"error": "Command timed out"}
 
     return {
-        "stdout": (stdout or b"").decode(errors="replace")[:3000],
+        "stdout": (stdout or b"").decode(errors="replace")[:8000],
         "stderr": (stderr or b"").decode(errors="replace")[:1000],
         "returncode": proc.returncode,
     }
@@ -65,7 +65,7 @@ async def _run_opencode(config, cmd: list) -> dict:
         return {"error": "OpenCode task timed out"}
 
     if proc.returncode != 0:
-        err = (stderr or b"").decode(errors="replace")[:2000]
+        err = (stderr or b"").decode(errors="replace")[:4000]
         return {"error": f"OpenCode exited with code {proc.returncode}: {err}"}
 
     output = (stdout or b"").decode(errors="replace").strip()
@@ -76,7 +76,7 @@ async def _run_opencode(config, cmd: list) -> dict:
         except json.JSONDecodeError:
             pass
 
-    return {"result": output[:5000]}
+    return {"result": output[:8000]}
 
 
 async def spawn_task(
